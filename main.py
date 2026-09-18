@@ -7,16 +7,18 @@ import socket
 
 # Setup broadcast socket
 broadcast = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-broadcast.connect(("127.0.0.1", 7500))	
+broadcast.connect(("127.0.0.1", 7500))
+broadcast.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1) # Allow broadcasting
 
 # Setup receiving socket
 receive = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 receive.bind(("0.0.0.0", 7501))
 receive.setblocking(False)
+receive.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) # Allow quick restart
 
-## Test code, designed to work with test_server.py 
-# num = 0
-# while True:
+# Test code, designed to work with test_server.py 
+#num = 0
+#while True:
 # 	# Send current number
 #	broadcast.send(str(num).encode("utf-8"))
 #	print(f"{num} sent")
