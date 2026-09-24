@@ -2,12 +2,16 @@
 
 # Library imports
 import socket
+import ipaddress
 
 ### Socket Section Start ###
 
+# Network Address
+network_address = "127.0.0.1"
+
 # Setup broadcast socket
 broadcast = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-broadcast.connect(("127.0.0.1", 7500))
+broadcast.connect((network_address, 7500))
 broadcast.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1) # Allow broadcasting
 
 # Setup receiving socket
@@ -32,6 +36,37 @@ receive.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) # Allow quick rest
 #	if num > 5:
 #		print("Process terminated")
 #		break
+
+#--------------------------
+# Helper Functions
+#--------------------------
+
+# Broadcasts integer out on port 7500
+def broadcast_code(code):
+  broadcast.send(str(code).encode("utf-8"))
+
+# Changes the target receiver (Verifies for valid address)
+def set_network_address(new_address):
+    global network_address
+    try:
+        ipaddress.ip_address(new_address) # Raises ValueError if invalid
+    except ValueError:
+        return False
+    network_address = new_address
+    broadcast.connect((network_address, 7500))
+    return True
+
+# Confirms reception of broadcasted codes. Returns (shooter_id, hit_id) or Nothing
+def poll_receive():
+    try:
+        data, _ = receive.recvfrom(1024)
+    except BlockingIOError:
+        return None # Nothing = waiting
+    try:
+        shooter, hit = data.decode("utf-8").split(":")
+        return int(shooter), int(hit)
+    except ValueError:
+        return None # Bad packet received
 
 # Close sockets
 broadcast.close()
