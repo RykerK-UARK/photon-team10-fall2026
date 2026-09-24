@@ -49,7 +49,7 @@ def broadcast_code(code):
 def set_network_address(new_address):
     global network_address
     try:
-        ipaddress.ip_address(new_address) # Raises ValueError if invalid
+        ipaddress.ip_address(new_address) # Confirms valid IPadress
     except ValueError:
         return False
     network_address = new_address
@@ -67,6 +67,36 @@ def poll_receive():
         return int(shooter), int(hit)
     except ValueError:
         return None # Bad packet received
+
+# # Helper Functions Testing
+# import time # Purely for testing purposes
+
+# # Testing broadcast_code
+# listener = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+# listener.bind(("127.0.0.1", 7500))
+# listener.settimeout(1)
+# broadcast_code(1234)
+# data, _ = listener.recvfrom(1024)
+# print(data)
+# listener.close()
+
+# # Testing set_network_address
+# print(set_network_address("127.0.0.1")) # Should print True
+# print(set_network_address("hello")) # Should print False
+# print(set_network_address("999.1.1.1")) # Should print False
+
+# # Testing poll_receive
+# sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+# sender.sendto(b"43:53", ("127.0.0.1", 7501))
+# time.sleep(0.1)
+# print(poll_receive()) # Should return (43, 53)
+# print(poll_receive()) # Should return None
+
+# sender.sendto(b"hello", ("127.0.0.1", 7501))
+# time.sleep(0.1)
+# print(poll_receive()) # Should Return None
+# sender.close()
 
 # Close sockets
 broadcast.close()
