@@ -103,7 +103,7 @@ class PlayerEntryScreen:
     UI file.
     """
 
-    def __init__(self, on_player_added: Optional[Callable[[Player], None]] = None):
+    def __init__(self, on_player_added: Optional[Callable[[Player], None]] = None, on_ip_changed: Optional[Callable[[None], bool]] = None):
         pygame.init()
         pygame.display.set_caption("Photon - Player Entry")
         self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
@@ -115,6 +115,7 @@ class PlayerEntryScreen:
         self.small_font = pygame.font.SysFont("arial", 16)
 
         self.on_player_added = on_player_added
+        self.on_ip_changed = on_ip_changed
         self.players: list[Player] = []
         self.team = "Red"
         self.message = "Enter an equipment ID and codename."
@@ -126,11 +127,15 @@ class PlayerEntryScreen:
         self.codename_input = TextInput(
             pygame.Rect(360, 220, 380, 48), "Codename", numeric_only=False, max_length=20
         )
+        self.ipaddress_input = TextInput(
+            pygame.Rect(100, 370, 190, 48), "Default: 127.0.0.1", numeric_only=False, max_length=15
+        )
 
         self.red_button = Button(pygame.Rect(360, 292, 180, 46), "RED TEAM", RED, RED_HOVER)
         self.green_button = Button(pygame.Rect(560, 292, 180, 46), "GREEN TEAM", GREEN, GREEN_HOVER)
         self.add_button = Button(pygame.Rect(430, 365, 240, 52), "ADD PLAYER", (65, 70, 82), (85, 90, 105))
         self.clear_button = Button(pygame.Rect(430, 645, 240, 42), "CLEAR ALL PLAYERS", (55, 55, 62), (75, 75, 84))
+        self.ip_button = Button(pygame.Rect(300, 380, 60, 30), "Apply", (55, 55, 62), (75, 75, 84))
 
     def add_player(self) -> None:
         equipment_text = self.equipment_input.text.strip()
@@ -168,6 +173,13 @@ class PlayerEntryScreen:
             f"Added {codename} (equipment {equipment_id}) to {self.team} Team.", SUCCESS
         )
 
+    def _change_network_address(self) -> None:
+        ipaddress_text = self.ipaddress_input.text.strip()
+        if self.on_ip_changed(ipaddress_text):
+            self._set_message(f"Network Address set to {ipaddress_text}", SUCCESS)
+        else:
+            self._set_message(f"Invalid IP Address", ERROR)
+
     def _set_message(self, text: str, color) -> None:
         self.message = text
         self.message_color = color
@@ -183,16 +195,20 @@ class PlayerEntryScreen:
     def _draw_form(self) -> None:
         label_equipment = self.font.render("Equipment ID", True, TEXT)
         label_codename = self.font.render("Codename", True, TEXT)
+        label_ipaddress = self.font.render("Network", True, TEXT)
         self.screen.blit(label_equipment, (215, 163))
         self.screen.blit(label_codename, (215, 233))
+        self.screen.blit(label_ipaddress, (15, 383))
 
         self.equipment_input.draw(self.screen, self.font)
         self.codename_input.draw(self.screen, self.font)
+        self.ipaddress_input.draw(self.screen, self.font)
 
         mouse_pos = pygame.mouse.get_pos()
         self.red_button.draw(self.screen, self.font, mouse_pos)
         self.green_button.draw(self.screen, self.font, mouse_pos)
         self.add_button.draw(self.screen, self.heading_font, mouse_pos)
+        self.ip_button.draw(self.screen, self.font, mouse_pos)
 
         selected_rect = self.red_button.rect if self.team == "Red" else self.green_button.rect
         pygame.draw.rect(self.screen, TEXT, selected_rect, 3, border_radius=6)
@@ -245,6 +261,7 @@ class PlayerEntryScreen:
 
                 self.equipment_input.handle_event(event)
                 self.codename_input.handle_event(event)
+                self.ipaddress_input.handle_event(event)
 
                 if self.red_button.clicked(event):
                     self.team = "Red"
@@ -255,6 +272,8 @@ class PlayerEntryScreen:
                 elif self.clear_button.clicked(event):
                     self.players.clear()
                     self._set_message("Player list cleared.", MUTED_TEXT)
+                elif self.ip_button.clicked(event):
+                    self._change_network_address()
                 elif event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
                     if not self.equipment_input.active and not self.codename_input.active:
                         self.add_player()
@@ -273,8 +292,8 @@ class PlayerEntryScreen:
         pygame.quit()
 
 
-def run_player_entry(on_player_added: Optional[Callable[[Player], None]] = None) -> None:
-    PlayerEntryScreen(on_player_added=on_player_added).run()
+def run_player_entry(on_player_added: Optional[Callable[[Player], None]] = None, on_ip_changed: Optional[Callable[[None], bool]] = None) -> None:
+    PlayerEntryScreen(on_player_added=on_player_added, on_ip_changed=on_ip_changed).run()
 
 
 #if __name__ == "__main__":
