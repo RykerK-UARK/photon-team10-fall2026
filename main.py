@@ -3,6 +3,7 @@
 # Library imports
 import socket
 import ipaddress
+from player_database import playerDatabase
 
 ### Socket Section Start ###
 
@@ -19,6 +20,9 @@ receive = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 receive.bind(("0.0.0.0", 7501))
 receive.setblocking(False)
 receive.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) # Allow quick restart
+
+# Create a database connection for the application
+database = playerDatabase()
 
 # Test code, designed to work with test_server.py 
 #num = 0
@@ -44,6 +48,48 @@ receive.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) # Allow quick rest
 # Broadcasts integer out on port 7500
 def broadcast_code(code):
   broadcast.send(str(code).encode("utf-8"))
+
+# Add a player to PostgreSQL, then announces the equipment ID to the UDP server
+def add_player(player_id, codename, equipment_id):
+    # Do not try database operations if connection failed at startup.
+    if database.conn is None or database.cursor is None:
+        print("PostgreSQL is unavailable.")
+        return False
+
+    player_id = int(player_id)
+    equipment_id = int(equipment_id)
+
+    if not database.add_player(player_id, codename):
+        return False
+
+    broadcast_code(equipment_id)
+    return True
+
+# Collect two players for the sprint 2 database entry test
+def add_two_players():
+    # Stop if PostgreSQL could not be reached.
+    if database.conn is None or database.cursor is None:
+        print("Start PostgreSQL or correct the database host.")
+        return
+
+    for i in range(2):
+        while True:
+            try:
+                player_id = int(input(f"Enter player {i+1} ID: "))
+                codename = input(f"Enter player {i+1} codename: ").strip()
+                equipment_id = int(input(f"Enter player {i+1} equipment ID: "))
+
+                if not codename:
+                    print("Codename cannot be empty.")
+                    continue
+
+                if add_player(player_id, codename, equipment_id):
+                    print(f"Player {player_id} added.")
+                    break
+
+                print(f"Player ID {player_id} already exists. Try again.")
+            except ValueError:
+                print("Player ID and equipment ID must be integers. Try again.")
 
 # Changes the target receiver (Verifies for valid address)
 def set_network_address(new_address):
@@ -99,7 +145,17 @@ def poll_receive():
 # sender.close()
 
 # Close sockets
-broadcast.close()
-receive.close()
+def shutdown():
+    database.disconnect()
+    broadcast.close()
+    receive.close()
+
+
+# Running this file performs the database entry test with two players
+if __name__ == "__main__":
+    try:
+        add_two_players()
+    finally:
+        shutdown()
 
 ### Socket Section End ###
