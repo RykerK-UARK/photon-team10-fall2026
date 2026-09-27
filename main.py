@@ -1,7 +1,13 @@
-# This is the main file that will facilitate the entire software.
+"""Main entry point for the Photon laser-tag application."""
 
-# Library imports
-import socket
+from player_entry import run_player_entry
 
-### Reserved space for socket stuff
-###
+
+def main() -> None:
+    # Sprint 2 UI entry point.
+    # Database/UDP integration can be passed to run_player_entry as a callback.
+    run_player_entry()
+
+
+if __name__ == "__main__":
+    main()
