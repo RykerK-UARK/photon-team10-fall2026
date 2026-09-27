@@ -277,5 +277,5 @@ def run_player_entry(on_player_added: Optional[Callable[[Player], None]] = None)
     PlayerEntryScreen(on_player_added=on_player_added).run()
 
 
-if __name__ == "__main__":
-    run_player_entry()
+#if __name__ == "__main__":
+#    run_player_entry()
