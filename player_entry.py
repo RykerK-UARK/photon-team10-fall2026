@@ -30,22 +30,29 @@ BLUE = (80, 105, 255)
 ERROR = (235, 95, 95)
 SUCCESS = (100, 220, 130)
 
+INPUT_DISABLED = (195, 195, 195)
+
 
 @dataclass
 class Player:
+    player_id: int
     equipment_id: int
     codename: str
     team: str
+    
+    def set_codename(self, codename):
+        self.codename = codename
 
 
 class TextInput:
-    def __init__(self, rect: pygame.Rect, placeholder: str, numeric_only: bool = False, max_length: int = 20):
+    def __init__(self, rect: pygame.Rect, placeholder: str, numeric_only: bool = False, max_length: int = 20, enabled=True):
         self.rect = rect
         self.placeholder = placeholder
         self.numeric_only = numeric_only
         self.max_length = max_length
         self.text = ""
         self.active = False
+        self.enabled = enabled
 
     def handle_event(self, event: pygame.event.Event) -> None:
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -60,14 +67,21 @@ class TextInput:
                     self.text += event.unicode
 
     def draw(self, surface: pygame.Surface, font: pygame.font.Font) -> None:
-        pygame.draw.rect(surface, INPUT_BG, self.rect, border_radius=4)
-        pygame.draw.rect(surface, BLUE if self.active else BORDER, self.rect, 2, border_radius=4)
-        if self.text:
-            value = self.text
-            color = INPUT_TEXT
+        if self.enabled:
+            pygame.draw.rect(surface, INPUT_BG, self.rect, border_radius=4)
+            if self.text:
+                value = self.text
+                color = INPUT_TEXT
+            else:
+                value = self.placeholder
+                color = (125, 125, 125)
         else:
-            value = self.placeholder
+            pygame.draw.rect(surface, INPUT_DISABLED, self.rect, border_radius=4)
+            value = "UNAVAILABLE"
             color = (125, 125, 125)
+            
+        pygame.draw.rect(surface, BLUE if self.active else BORDER, self.rect, 2, border_radius=4)
+        
         rendered = font.render(value, True, color)
         surface.blit(rendered, (self.rect.x + 12, self.rect.centery - rendered.get_height() // 2))
 
@@ -121,8 +135,11 @@ class PlayerEntryScreen:
         self.message = "Enter an equipment ID and codename."
         self.message_color = MUTED_TEXT
 
+        self.player_id_input = TextInput(
+            pygame.Rect(360, 150, 100, 48), "Player ID", numeric_only=True, max_length=4
+        )
         self.equipment_input = TextInput(
-            pygame.Rect(360, 150, 380, 48), "Equipment ID", numeric_only=True, max_length=4
+            pygame.Rect(640, 150, 100, 48), "Equip. ID", numeric_only=True, max_length=4
         )
         self.codename_input = TextInput(
             pygame.Rect(360, 220, 380, 48), "Codename", numeric_only=False, max_length=20
@@ -138,14 +155,26 @@ class PlayerEntryScreen:
         self.ip_button = Button(pygame.Rect(300, 380, 60, 30), "Apply", (55, 55, 62), (75, 75, 84))
 
     def add_player(self) -> None:
+        player_id_text = self.player_id_input.text.strip()
         equipment_text = self.equipment_input.text.strip()
         codename = self.codename_input.text.strip()
 
+        if not player_id_text:
+            self._set_message("Player ID is required.", ERROR)
+            return
         if not equipment_text:
             self._set_message("Equipment ID is required.", ERROR)
             return
-        if not codename:
-            self._set_message("Codename is required.", ERROR)
+        #if not codename: # Only needed if pID is not already in database
+        #    self._set_message("Codename is required.", ERROR)
+        #    return
+
+        player_id = int(player_id_text)
+        if player_id <= 0:
+            self._set_message("Player ID must be greater than 0.", ERROR)
+            return
+        if any(player.player_id == player_id for player in self.players):
+            self._set_message(f"Player ID {player_id} is already in game.", ERROR)
             return
 
         equipment_id = int(equipment_text)
@@ -156,21 +185,27 @@ class PlayerEntryScreen:
             self._set_message(f"Equipment ID {equipment_id} is already assigned.", ERROR)
             return
 
-        player = Player(equipment_id=equipment_id, codename=codename, team=self.team)
+        player = Player(player_id=player_id, equipment_id=equipment_id, codename=codename, team=self.team)
 
         try:
             if self.on_player_added is not None:
-                self.on_player_added(player)
+                if not self.on_player_added(player):
+                    if not codename:
+                        self._set_message("Player ID not found in database and codename not entered", ERROR)
+                    else:
+                        self._set_message("PostgreSQL is unavailable", ERROR)
+                    return
         except Exception as exc:
             # Keep the player off the local roster if database/UDP integration fails.
             self._set_message(f"Could not add player: {exc}", ERROR)
             return
 
         self.players.append(player)
+        self.player_id_input.text = ""
         self.equipment_input.text = ""
         self.codename_input.text = ""
         self._set_message(
-            f"Added {codename} (equipment {equipment_id}) to {self.team} Team.", SUCCESS
+            f"Added {codename} (ID: {player_id}) (equipment {equipment_id}) to {self.team} Team.", SUCCESS
         )
 
     def _change_network_address(self) -> None:
@@ -193,13 +228,16 @@ class PlayerEntryScreen:
         self.screen.blit(subtitle, subtitle.get_rect(center=(WINDOW_WIDTH // 2, 98)))
 
     def _draw_form(self) -> None:
+        label_player_id = self.font.render("Player ID", True, TEXT)
         label_equipment = self.font.render("Equipment ID", True, TEXT)
         label_codename = self.font.render("Codename", True, TEXT)
         label_ipaddress = self.font.render("Network", True, TEXT)
-        self.screen.blit(label_equipment, (215, 163))
-        self.screen.blit(label_codename, (215, 233))
+        self.screen.blit(label_player_id, (255, 163))
+        self.screen.blit(label_equipment, (505, 163))
+        self.screen.blit(label_codename, (255, 233))
         self.screen.blit(label_ipaddress, (15, 383))
 
+        self.player_id_input.draw(self.screen, self.font)
         self.equipment_input.draw(self.screen, self.font)
         self.codename_input.draw(self.screen, self.font)
         self.ipaddress_input.draw(self.screen, self.font)
@@ -259,9 +297,18 @@ class PlayerEntryScreen:
                 elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                     running = False
 
+                player_id_text = self.player_id_input.text.strip()
+                if not player_id_text or int(player_id_text) <= 0 or any(player.player_id == int(player_id_text) for player in self.players):
+                    self.codename_input.enabled = False
+                else: 
+                    self.codename_input.enabled = True
+
+                self.player_id_input.handle_event(event)
                 self.equipment_input.handle_event(event)
-                self.codename_input.handle_event(event)
                 self.ipaddress_input.handle_event(event)
+                
+                if self.codename_input.enabled:
+                    self.codename_input.handle_event(event)
 
                 if self.red_button.clicked(event):
                     self.team = "Red"

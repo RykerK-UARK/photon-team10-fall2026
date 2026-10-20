@@ -81,7 +81,7 @@ class playerDatabase:
 	# Determines the id for a new player based on current state of database 
     def get_new_player_id(self, team):
         # Get modifier to help differentiate teams
-        team_modifier = 0 if team=="Red" else 1
+        team_modifier = 2 if team=="Green" else 1
         
         # Iterate over rows
         n_players_on_team = 0

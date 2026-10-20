@@ -11,7 +11,6 @@ from player_entry import run_player_entry
 # Create a database connection for the application
 database = playerDatabase()
 
-
 def run_splash_screen(duration_ms: int = 2500) -> bool:
     """Display the Photon splash screen before opening player entry.
 
@@ -86,7 +85,7 @@ def main() -> None:
     
     # TEST: Print all players in the database and then clear the database
     database.print_all_players()
-    database.clear_players()
+    #database.clear_players()
     
     # TEST: Print current Network Address
     print(network_address)
@@ -122,20 +121,25 @@ def broadcast_code(code):
         return
 
 # Add a player to PostgreSQL, then announces the equipment ID to the UDP server
-def add_player(player): # player_id, codename, equipment_id
+def add_player(player): # Player vars: player_id, equipment_id, codename, team
     # Do not try database operations if connection failed at startup.
     if database.conn is None or database.cursor is None:
-        print("PostgreSQL is unavailable.")
         return False
 
-	# Get values from the player object
-    player_id = database.get_new_player_id(player.team)
-    equipment_id = player.equipment_id
+    # Get values from the player object
+    player_id = player.player_id
+    equipment_id = player.equipment_id    
     codename = player.codename
 
-    if not database.add_player(player_id, codename):
+    if database.get_player(player_id) != None: # player already in database
+        player.set_codename(database.get_player(player_id)[1])
+        broadcast_code(equipment_id)
+        return True
+        
+    if not codename:
         return False
-
+        
+    database.add_player(player_id, codename)
     broadcast_code(equipment_id)
     return True
 
