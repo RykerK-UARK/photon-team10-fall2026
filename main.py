@@ -162,33 +162,6 @@ def poll_receive():
     except ValueError:
         return None # Bad packet received
 
-## Collect two players for the sprint 2 database entry test
-#def add_two_players():
-#    # Stop if PostgreSQL could not be reached.
-#    if database.conn is None or database.cursor is None:
-#        print("Start PostgreSQL or correct the database host.")
-#        return
-#
-#    for i in range(2):
-#        while True:
-#            try:
-#                player_id = int(input(f"Enter player {i+1} ID: "))
-#                codename = input(f"Enter player {i+1} codename: ").strip()
-#                equipment_id = int(input(f"Enter player {i+1} equipment ID: "))
-#
-#                if not codename:
-#                    print("Codename cannot be empty.")
-#                    continue
-#
-#                if add_player(player_id, codename, equipment_id):
-#                    print(f"Player {player_id} added.")
-#                    break
-#
-#                print(f"Player ID {player_id} already exists. Try again.")
-#            except ValueError:
-#                print("Player ID and equipment ID must be integers. Try again.")
-
-
 # Close sockets
 def shutdown():
     database.disconnect()
