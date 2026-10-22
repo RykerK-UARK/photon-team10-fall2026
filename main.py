@@ -1,12 +1,11 @@
 """Main entry point for the Photon laser-tag application."""
 # Library imports
-import socket
-import ipaddress
 from pathlib import Path
 
 import pygame
 from player_database import playerDatabase
 from player_entry import run_player_entry
+from udp_socket import broadcast_code, poll_receive, set_network_address, get_network_address, close_sockets
 
 # Create a database connection for the application
 database = playerDatabase()
@@ -89,37 +88,11 @@ def main() -> None:
     database.clear_players()
     
     # TEST: Print current Network Address
-    print(network_address)
+    print(get_network_address())
     
     shutdown()
 
-### Socket Section Start ###
 
-# Network Address
-network_address = "127.0.0.1"
-BROADCAST_PORT = 7500
-
-# Setup broadcast socket
-broadcast = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-broadcast.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1) # Allow broadcasting
-
-# Setup receiving socket
-receive = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-receive.bind(("0.0.0.0", 7501))
-receive.setblocking(False)
-receive.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) # Allow quick restart
-
-#--------------------------
-# Helper Socket Functions
-#--------------------------
-
-# Broadcasts integer out on port 7500
-def broadcast_code(code):
-    try:
-        broadcast.sendto(str(code).encode("utf-8"), (network_address, BROADCAST_PORT))
-    # Could not connect to server (probably not set up)
-    except ConnectionRefusedError:
-        return
 
 # Add a player to PostgreSQL, then announces the equipment ID to the UDP server
 def add_player(player): # player_id, codename, equipment_id
@@ -129,9 +102,9 @@ def add_player(player): # player_id, codename, equipment_id
         return False
 
 	# Get values from the player object
-    player_id = database.get_new_player_id(player.team)
-    equipment_id = player.equipment_id
-    codename = player.codename
+	player_id = database.get_new_player_id(player.team)
+	equipment_id = player.equipment_id
+	codename = player.codename
 
     if not database.add_player(player_id, codename):
         return False
@@ -139,36 +112,10 @@ def add_player(player): # player_id, codename, equipment_id
     broadcast_code(equipment_id)
     return True
 
-# Changes the target receiver (Verifies for valid address)
-def set_network_address(new_address) -> bool:
-    global network_address
-    try:
-        ipaddress.ip_address(new_address) # Confirms valid IPadress
-    except ValueError:
-        return False
-    network_address = new_address
-    
-    return True
-
-# Confirms reception of broadcasted codes. Returns (shooter_id, hit_id) or Nothing
-def poll_receive():
-    try:
-        data, _ = receive.recvfrom(1024)
-    except BlockingIOError:
-        return None # Nothing = waiting
-    try:
-        shooter, hit = data.decode("utf-8").split(":")
-        return int(shooter), int(hit)
-    except ValueError:
-        return None # Bad packet received
-
 # Close sockets
 def shutdown():
     database.disconnect()
-    broadcast.close()
-    receive.close()
-
-### Socket Section End ###
+    close_sockets()
 
 # Run Main
 if __name__ == "__main__":
