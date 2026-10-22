@@ -24,23 +24,6 @@ receive.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) # Allow quick rest
 # Create a database connection for the application
 database = playerDatabase()
 
-# Test code, designed to work with test_server.py 
-#num = 0
-#while True:
-# 	# Send current number
-#	broadcast.send(str(num).encode("utf-8"))
-#	print(f"{num} sent")
-#	
-#	# Receive server response from other socket
-#	data, address = receive.recvfrom(1024)
-#	num = int(str(data, "utf-8"))
-#	print(f"{num} received")
-#	
-#	# If the received number is greater than 5, end the process
-#	if num > 5:
-#		print("Process terminated")
-#		break
-
 #--------------------------
 # Helper Functions
 #--------------------------
@@ -113,36 +96,6 @@ def poll_receive():
         return int(shooter), int(hit)
     except ValueError:
         return None # Bad packet received
-
-# # Helper Functions Testing
-# import time # Purely for testing purposes
-
-# # Testing broadcast_code
-# listener = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-# listener.bind(("127.0.0.1", 7500))
-# listener.settimeout(1)
-# broadcast_code(1234)
-# data, _ = listener.recvfrom(1024)
-# print(data)
-# listener.close()
-
-# # Testing set_network_address
-# print(set_network_address("127.0.0.1")) # Should print True
-# print(set_network_address("hello")) # Should print False
-# print(set_network_address("999.1.1.1")) # Should print False
-
-# # Testing poll_receive
-# sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-
-# sender.sendto(b"43:53", ("127.0.0.1", 7501))
-# time.sleep(0.1)
-# print(poll_receive()) # Should return (43, 53)
-# print(poll_receive()) # Should return None
-
-# sender.sendto(b"hello", ("127.0.0.1", 7501))
-# time.sleep(0.1)
-# print(poll_receive()) # Should Return None
-# sender.close()
 
 # Close sockets
 def shutdown():
