@@ -14,6 +14,7 @@ import pygame
 WINDOW_WIDTH = 1100
 WINDOW_HEIGHT = 720
 FPS = 60
+START_COUNTDOWN_MS = 30_000
 
 BACKGROUND = (8, 8, 10)
 PANEL = (22, 22, 28)
@@ -132,6 +133,10 @@ class PlayerEntryScreen:
         self.on_ip_changed = on_ip_changed
         self.players: list[Player] = []
         self.team = "Red"
+        self.play_action_active = False
+        self.timer_running = False
+        self.countdown_remaining_ms = START_COUNTDOWN_MS
+        self.countdown_last_tick = None
         self.message = "Enter an equipment ID and codename."
         self.message_color = MUTED_TEXT
 
@@ -288,14 +293,53 @@ class PlayerEntryScreen:
         )
         self.clear_button.draw(self.screen, self.small_font, pygame.mouse.get_pos())
 
+    def _draw_play_action(self) -> None:
+        title = self.title_font.render("PLAY ACTION", True, TEXT)
+        self.screen.blit(title, title.get_rect(center=(WINDOW_WIDTH // 2, 62)))
+
+        seconds_remaining = (self.countdown_remaining_ms + 999) // 1000
+        minutes, seconds = divmod(seconds_remaining, 60)
+        timer_text = f"{minutes:02d}:{seconds:02d}"
+        timer_color = SUCCESS if self.timer_running else MUTED_TEXT
+        timer_label = self.title_font.render(timer_text, True, timer_color)
+        self.screen.blit(timer_label, timer_label.get_rect(center=(WINDOW_WIDTH // 2, 125)))
+
+        self._draw_roster_column(
+            "RED TEAM", "Red", pygame.Rect(80, 170, 440, 440), RED_HOVER
+        )
+        self._draw_roster_column(
+            "GREEN TEAM", "Green", pygame.Rect(580, 170, 440, 440), GREEN_HOVER
+        )
+
     def run(self) -> None:
         running = True
         while running:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
-                elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                    running = False
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        running = False
+                    elif event.key == pygame.K_F5 and not self.play_action_active:
+                        # Show the play view and start the 30-second countdown.
+                        self.play_action_active = True
+                        self.timer_running = True
+                        self.countdown_last_tick = pygame.time.get_ticks()
+                    elif event.key == pygame.K_F12:
+                        # Clear this game's roster without deleting database records.
+                        self.players.clear()
+                        self.player_id_input.text = ""
+                        self.equipment_input.text = ""
+                        self.codename_input.text = ""
+                        self.play_action_active = False
+                        self.timer_running = False
+                        self.countdown_remaining_ms = START_COUNTDOWN_MS
+                        self.countdown_last_tick = None
+                        self._set_message("Player list cleared.", MUTED_TEXT)
+                    elif event.key == pygame.K_F6:
+                        # Freeze the countdown but keep the application open.
+                        self.timer_running = False
+                        self.countdown_last_tick = None
 
                 player_id_text = self.player_id_input.text.strip()
                 if not player_id_text or int(player_id_text) <= 0 or any(player.player_id == int(player_id_text) for player in self.players):
@@ -325,12 +369,28 @@ class PlayerEntryScreen:
                     if not self.equipment_input.active and not self.codename_input.active:
                         self.add_player()
 
-            self.screen.fill(BACKGROUND)
-            self._draw_header()
-            self._draw_form()
-            self._draw_rosters()
+            if self.timer_running:
+                now = pygame.time.get_ticks()
+                elapsed = now - self.countdown_last_tick
+                self.countdown_remaining_ms = max(
+                    0, self.countdown_remaining_ms - elapsed
+                )
+                self.countdown_last_tick = now
+                if self.countdown_remaining_ms == 0:
+                    self.timer_running = False
+                    self.countdown_last_tick = None
 
-            footer = self.small_font.render("ESC = Exit", True, MUTED_TEXT)
+            self.screen.fill(BACKGROUND)
+            if self.play_action_active:
+                self._draw_play_action()
+                footer_text = "F6 = Stop timer | F12 = Clear players | ESC = Exit"
+            else:
+                self._draw_header()
+                self._draw_form()
+                self._draw_rosters()
+                footer_text = "F5 = Start game | F12 = Clear players | ESC = Exit"
+
+            footer = self.small_font.render(footer_text, True, MUTED_TEXT)
             self.screen.blit(footer, (20, WINDOW_HEIGHT - 30))
 
             pygame.display.flip()
