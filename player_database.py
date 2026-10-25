@@ -1,5 +1,8 @@
-import psycopg2
-from psycopg2 import sql
+try:
+    import psycopg2
+except ImportError:
+    # Allow the Pygame UI to launch in offline/demo mode without this driver.
+    psycopg2 = None
 
 # Define connection parameters 
 connection_params = {
@@ -10,12 +13,15 @@ connection_params = {
     "port":     "5432",
 }
 
-
 class playerDatabase:
     # Initialize the database object and connect to PostgreSQL.
     def __init__(self):
         self.conn = None
         self.cursor = None
+
+        if psycopg2 is None:
+            print("psycopg2 is not installed; running player-entry UI in offline demo mode.")
+            return
 
         try:
             self.conn = psycopg2.connect(**connection_params)
@@ -74,27 +80,6 @@ class playerDatabase:
             print(row)
             
     # Clear database
-    def clear_players(self): # TESTING ONLY
+    def clear_players(self): # TESTING ONLY, DO NOT USE FOR ANYTHING FINAL IN THE PROJECT!!!!!!!
         self.cursor.execute("TRUNCATE public.players")
         self.conn.commit()
-
-	# Determines the id for a new player based on current state of database 
-    def get_new_player_id(self, team):
-        # Get modifier to help differentiate teams
-        team_modifier = 2 if team=="Green" else 1
-        
-        # Iterate over rows
-        n_players_on_team = 0
-        self.cursor.execute(
-            "SELECT id FROM public.players ORDER BY id;"
-        )
-        rows = self.cursor.fetchall()
-        for row in rows:
-            if row == None:
-                continue
-            if (row[0] + team_modifier) % 2 == 0:
-                n_players_on_team += 1
-                
-        # N of players on team is equal to player ID with respect to that team
-        return n_players_on_team * 2 + team_modifier
-		

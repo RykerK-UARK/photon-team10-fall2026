@@ -1,0 +1,8 @@
+
+{
+  "code-runner.executorMap": {
+    "python": "python3 -u \"$workspaceRoot/main.py\""
+  },
+  "code-runner.runInTerminal": true
+}
+
