@@ -1,4 +1,4 @@
-"""Photon player-entry screen for Sprint 2.
+"""Photon player-entry screen for Sprint 3.
 
 This module contains the user interface for entering players before a game.
 It intentionally keeps database/UDP logic outside of the UI so the team's
@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from typing import Callable, Optional
 
 import pygame
+
+from play_action import PlayActionScreen
 
 
 WINDOW_WIDTH = 1100
@@ -103,8 +105,12 @@ class PlayerEntryScreen:
     UI file.
     """
 
-    def __init__(self, on_player_added: Optional[Callable[[Player], None]] = None, on_ip_changed: Optional[Callable[[None], bool]] = None):
-        pygame.init()
+    def __init__(
+        self,
+        on_player_added: Optional[Callable[[Player], bool]] = None,
+        on_ip_changed: Optional[Callable[[str], bool]] = None,
+        on_players_cleared: Optional[Callable[[], bool]] = None,
+    ):
         pygame.display.set_caption("Photon - Player Entry")
         self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
         self.clock = pygame.time.Clock()
@@ -116,9 +122,11 @@ class PlayerEntryScreen:
 
         self.on_player_added = on_player_added
         self.on_ip_changed = on_ip_changed
+        self.on_players_cleared = on_players_cleared
         self.players: list[Player] = []
         self.team = "Red"
-        self.message = "Enter an equipment ID and codename."
+        self.message = ("Enter an equipment ID and codename." if on_player_added is not None
+                        else "Offline demo: players are not saved to PostgreSQL.")
         self.message_color = MUTED_TEXT
 
         self.equipment_input = TextInput(
@@ -134,7 +142,8 @@ class PlayerEntryScreen:
         self.red_button = Button(pygame.Rect(360, 292, 180, 46), "RED TEAM", RED, RED_HOVER)
         self.green_button = Button(pygame.Rect(560, 292, 180, 46), "GREEN TEAM", GREEN, GREEN_HOVER)
         self.add_button = Button(pygame.Rect(430, 365, 240, 52), "ADD PLAYER", (65, 70, 82), (85, 90, 105))
-        self.clear_button = Button(pygame.Rect(430, 645, 240, 42), "CLEAR ALL PLAYERS", (55, 55, 62), (75, 75, 84))
+        self.clear_button = Button(pygame.Rect(270, 645, 240, 42), "CLEAR ALL PLAYERS", (55, 55, 62), (75, 75, 84))
+        self.start_button = Button(pygame.Rect(590, 645, 240, 42), "START GAME", GREEN, GREEN_HOVER)
         self.ip_button = Button(pygame.Rect(300, 380, 60, 30), "Apply", (55, 55, 62), (75, 75, 84))
 
     def add_player(self) -> None:
@@ -160,7 +169,9 @@ class PlayerEntryScreen:
 
         try:
             if self.on_player_added is not None:
-                self.on_player_added(player)
+                if self.on_player_added(player) is False:
+                    self._set_message("Could not save player to database.", ERROR)
+                    return
         except Exception as exc:
             # Keep the player off the local roster if database/UDP integration fails.
             self._set_message(f"Could not add player: {exc}", ERROR)
@@ -175,7 +186,7 @@ class PlayerEntryScreen:
 
     def _change_network_address(self) -> None:
         ipaddress_text = self.ipaddress_input.text.strip()
-        if self.on_ip_changed(ipaddress_text):
+        if self.on_ip_changed is not None and self.on_ip_changed(ipaddress_text):
             self._set_message(f"Network Address set to {ipaddress_text}", SUCCESS)
         else:
             self._set_message(f"Invalid IP Address", ERROR)
@@ -249,6 +260,34 @@ class PlayerEntryScreen:
             "GREEN TEAM", "Green", pygame.Rect(595, 480, 400, 150), GREEN_HOVER
         )
         self.clear_button.draw(self.screen, self.small_font, pygame.mouse.get_pos())
+        self.start_button.draw(self.screen, self.small_font, pygame.mouse.get_pos())
+
+    def clear_players(self) -> None:
+        """Clear the roster and, when connected, the database (F12 or button)."""
+        try:
+            if self.on_players_cleared is not None:
+                if self.on_players_cleared() is False:
+                    self._set_message("Could not clear saved players.", ERROR)
+                    return
+        except Exception as exc:
+            self._set_message(f"Could not clear saved players: {exc}", ERROR)
+            return
+
+        self.players.clear()
+        self.equipment_input.text = ""
+        self.codename_input.text = ""
+        self._set_message("All player entries cleared.", MUTED_TEXT)
+
+    def start_game(self) -> str:
+        """Open the action display, with this screen's players and same window."""
+        if not self.players:
+            self._set_message("Add at least one player before starting.", ERROR)
+            return "back"
+
+        action_screen = PlayActionScreen(self.players, self.screen, self.clock)
+        result = action_screen.run()
+        pygame.display.set_caption("Photon - Player Entry")
+        return result
 
     def run(self) -> None:
         running = True
@@ -256,8 +295,19 @@ class PlayerEntryScreen:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
-                elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                    running = False
+                    break
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        running = False
+                        break
+                    if event.key == pygame.K_F12:
+                        self.clear_players()
+                        continue
+                    if event.key == pygame.K_F5:
+                        if self.start_game() == "quit":
+                            running = False
+                            break
+                        continue
 
                 self.equipment_input.handle_event(event)
                 self.codename_input.handle_event(event)
@@ -270,30 +320,44 @@ class PlayerEntryScreen:
                 elif self.add_button.clicked(event):
                     self.add_player()
                 elif self.clear_button.clicked(event):
-                    self.players.clear()
-                    self._set_message("Player list cleared.", MUTED_TEXT)
+                    self.clear_players()
+                elif self.start_button.clicked(event):
+                    if self.start_game() == "quit":
+                        running = False
+                        break
                 elif self.ip_button.clicked(event):
                     self._change_network_address()
                 elif event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
                     if not self.equipment_input.active and not self.codename_input.active:
                         self.add_player()
 
+            if not running:
+                break
+
             self.screen.fill(BACKGROUND)
             self._draw_header()
             self._draw_form()
             self._draw_rosters()
 
-            footer = self.small_font.render("ESC = Exit", True, MUTED_TEXT)
-            self.screen.blit(footer, (20, WINDOW_HEIGHT - 30))
+            footer = self.small_font.render(
+                "ESC = Exit  |  F5 = Start  |  F12 = Clear Players", True, MUTED_TEXT
+            )
+            self.screen.blit(footer, (20, WINDOW_HEIGHT - 25))
 
             pygame.display.flip()
             self.clock.tick(FPS)
 
-        pygame.quit()
 
-
-def run_player_entry(on_player_added: Optional[Callable[[Player], None]] = None, on_ip_changed: Optional[Callable[[None], bool]] = None) -> None:
-    PlayerEntryScreen(on_player_added=on_player_added, on_ip_changed=on_ip_changed).run()
+def run_player_entry(
+    on_player_added: Optional[Callable[[Player], bool]] = None,
+    on_ip_changed: Optional[Callable[[str], bool]] = None,
+    on_players_cleared: Optional[Callable[[], bool]] = None,
+) -> None:
+    PlayerEntryScreen(
+        on_player_added=on_player_added,
+        on_ip_changed=on_ip_changed,
+        on_players_cleared=on_players_cleared,
+    ).run()
 
 
 #if __name__ == "__main__":

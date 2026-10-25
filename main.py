@@ -61,43 +61,37 @@ def run_splash_screen(duration_ms: int = 2500) -> bool:
     while pygame.time.get_ticks() - start_time < duration_ms:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                pygame.quit()
                 return False
             if event.type == pygame.KEYDOWN or (
                 event.type == pygame.MOUSEBUTTONDOWN and event.button == 1
             ):
-                pygame.quit()
                 return True
 
         clock.tick(60)
 
-    pygame.quit()
     return True
 
 def main() -> None:
-    # Sprint 2 UI entry point.
-    if not run_splash_screen():
+    """Run Splash -> Player Entry -> Play Action using one Pygame session."""
+    try:
+        if not run_splash_screen():
+            return
+
+        # The local UI can still be demonstrated when PostgreSQL is offline.
+        connected = database.conn is not None and database.cursor is not None
+        run_player_entry(
+            on_player_added=add_player if connected else None,
+            on_ip_changed=set_network_address,
+            on_players_cleared=clear_players if connected else None,
+        )
+    finally:
         shutdown()
-        return
-
-    # Database/UDP integration can be passed to run_player_entry as a callback.
-    run_player_entry(add_player, set_network_address)
-
-    # TEST: Print all players in the database and then clear the database
-    database.print_all_players()
-    database.clear_players()
-
-    # TEST: Print current Network Address
-    print(get_network_address())
-
-    shutdown()
+        pygame.quit()
 
 
 # Add a player to PostgreSQL, then announces the equipment ID to the UDP server
 def add_player(player):  # player_id, codename, equipment_id
-    # Do not try database operations if connection failed at startup.
     if database.conn is None or database.cursor is None:
-        print("PostgreSQL is unavailable.")
         return False
 
     # Get values from the player object
@@ -109,6 +103,14 @@ def add_player(player):  # player_id, codename, equipment_id
         return False
 
     broadcast_code(equipment_id)
+    return True
+
+
+def clear_players():
+    """F12/Clear All also clears saved players when PostgreSQL is connected."""
+    if database.conn is None or database.cursor is None:
+        return False
+    database.clear_players()
     return True
 
 

@@ -1,5 +1,8 @@
-import psycopg2
-from psycopg2 import sql
+try:
+    import psycopg2
+except ImportError:
+    # Allow the Pygame UI to launch in offline/demo mode without this driver.
+    psycopg2 = None
 
 # Define connection parameters 
 connection_params = {
@@ -16,6 +19,10 @@ class playerDatabase:
     def __init__(self):
         self.conn = None
         self.cursor = None
+
+        if psycopg2 is None:
+            print("psycopg2 is not installed; running player-entry UI in offline demo mode.")
+            return
 
         try:
             self.conn = psycopg2.connect(**connection_params)
@@ -74,7 +81,7 @@ class playerDatabase:
             print(row)
             
     # Clear database
-    def clear_players(self): # TESTING ONLY
+    def clear_players(self):
         self.cursor.execute("TRUNCATE public.players")
         self.conn.commit()
 

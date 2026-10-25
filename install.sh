@@ -23,14 +23,14 @@ python3 -m venv "$VENV_DIR"
 # Copy application files
 cp -r "$SRC_DIR"/countdown_images "$INSTALL_DIR/"
 cp -r "$SRC_DIR"/game_sounds      "$INSTALL_DIR/"
-cp -r "$SRC_DIR"/helmet_sounds    "$INSTALL_DIR/"
 cp -r "$SRC_DIR"/photon_tracks    "$INSTALL_DIR/"
 cp "$SRC_DIR"/baseicon.jpg        "$INSTALL_DIR/"
 cp "$SRC_DIR"/logo.jpg            "$INSTALL_DIR/"
 cp "$SRC_DIR"/main.py             "$INSTALL_DIR/"
 cp "$SRC_DIR"/player_database.py  "$INSTALL_DIR/"
 cp "$SRC_DIR"/player_entry.py     "$INSTALL_DIR/"
-cp "$SRC_DIR"/test_server.py      "$INSTALL_DIR/"
+cp "$SRC_DIR"/play_action.py      "$INSTALL_DIR/"
+cp "$SRC_DIR"/udp_sockets.py      "$INSTALL_DIR/"
 
 # Create a convenient command in /usr/local/bin called "photon"
 cat > "/usr/local/bin/photon" <<EOF
