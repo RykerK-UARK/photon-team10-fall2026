@@ -10,7 +10,7 @@ from typing import Callable, Optional
 
 import pygame
 
-from countdown import run_countdown
+from game_start_countdown import GameStartCountdown
 from play_action import PlayActionScreen
 
 
@@ -287,15 +287,16 @@ class PlayerEntryScreen:
 
         # Separate pre-game stage. A teammate can change countdown.py without
         # needing to edit this screen or the play-action screen.
-        countdown_result = run_countdown(self.screen, self.clock)
+        countdown_screen = GameStartCountdown(self.screen, self.clock)
+        countdown_result = countdown_screen.run()
         if countdown_result != "complete":
             pygame.display.set_caption("Photon - Player Entry")
             return countdown_result  # 'back' (ESC) or 'quit' (window closed)
 
         action_screen = PlayActionScreen(self.players, self.screen, self.clock)
-        result = action_screen.run()
+        action_result = action_screen.run()
         pygame.display.set_caption("Photon - Player Entry")
-        return result
+        return action_result
 
     def run(self) -> None:
         running = True
