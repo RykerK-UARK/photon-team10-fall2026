@@ -15,7 +15,7 @@ class GameStartCountdown:
 
     def change_image(self, image_name) -> None:
         # Load the Photon image from the same folder as main.py.
-        image_path = Path(__file__).resolve().with_name(image_name)
+        image_path = Path(__file__).resolve().parent / "countdown_images" / image_name
         self.screen.fill(BACKGROUND)
         try:
             image = pygame.image.load(str(image_path)).convert()
@@ -52,4 +52,4 @@ class GameStartCountdown:
                         return "quit"
                 self.clock.tick(FPS)
 
-        return True
+        return "complete"
