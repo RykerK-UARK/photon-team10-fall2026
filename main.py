@@ -71,22 +71,27 @@ def run_splash_screen(duration_ms: int = 2500) -> bool:
     return True
 
 def main() -> None:
-    # Sprint 2 UI entry point.
-    if not run_splash_screen():
+    """Run Splash -> Player Entry -> Play Action using one Pygame session."""
+    try:
+        if not run_splash_screen():
+            return
+
+        # The local UI can still be demonstrated when PostgreSQL is offline.
+        connected = database.conn is not None and database.cursor is not None
+        run_player_entry(
+            on_player_added=add_player if connected else None,
+            on_ip_changed=set_network_address
+        )
+        
+        # TEST: Print all players in the database and then clear the database
+        database.print_all_players()
+        #database.clear_players() TESTING ONLY, DO NOT UNCOMMENT HAPHAZORDLY
+        
+        # TEST: Print current Network Address    
+        print(get_network_address())
+    finally:
         shutdown()
         return
-
-    # Database/UDP integration can be passed to run_player_entry as a callback.
-    run_player_entry(add_player, set_network_address)
-    
-    # TEST: Print all players in the database and then clear the database
-    database.print_all_players()
-    #database.clear_players() TESTING ONLY, DO NOT UNCOMMENT HAPHAZORDLY
-    
-    # TEST: Print current Network Address
-    print(get_network_address())
-    
-    shutdown()
 
 ### Socket Section Start ###
 

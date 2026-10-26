@@ -80,7 +80,7 @@ class PlayActionScreen:
         # Limit the visible list to six entries to keep the panel readable while
         # still showing the most relevant players in the first view.
         for index, player in enumerate(players[:6], start=1):
-            player_text = f"{index}.  {player.codename}    ID: {player.equipment_id}"
+            player_text = f"{index}.  {player.codename}    eID: {player.equipment_id}"
             line = self.player_font.render(player_text, True, TEXT)
             self.screen.blit(line, (rect.x + 24, rect.y + 92 + (index - 1) * 29))
 
