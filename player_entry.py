@@ -10,6 +10,7 @@ from typing import Callable, Optional
 
 import pygame
 
+from countdown import run_countdown
 from play_action import PlayActionScreen
 
 
@@ -301,10 +302,17 @@ class PlayerEntryScreen:
         self._set_message("All player entries cleared.", MUTED_TEXT)
 
     def start_game(self) -> str:
-        """Open the action display, with this screen's players and same window."""
+        """Start countdown first, then show play action using the same window."""
         if not self.players:
             self._set_message("Add at least one player before starting.", ERROR)
             return "back"
+
+        # Separate pre-game stage. A teammate can change countdown.py without
+        # needing to edit this screen or the play-action screen.
+        countdown_result = run_countdown(self.screen, self.clock)
+        if countdown_result != "complete":
+            pygame.display.set_caption("Photon - Player Entry")
+            return countdown_result  # 'back' (ESC) or 'quit' (window closed)
 
         action_screen = PlayActionScreen(self.players, self.screen, self.clock)
         result = action_screen.run()

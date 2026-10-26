@@ -84,11 +84,11 @@ def main() -> None:
         )
         
         # TEST: Print all players in the database and then clear the database
-        database.print_all_players()
+        #database.print_all_players()
         #database.clear_players() TESTING ONLY, DO NOT UNCOMMENT HAPHAZORDLY
         
         # TEST: Print current Network Address    
-        print(get_network_address())
+        #print(get_network_address())
     finally:
         shutdown()
         return

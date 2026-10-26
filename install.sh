@@ -30,6 +30,7 @@ cp "$SRC_DIR"/main.py             "$INSTALL_DIR/"
 cp "$SRC_DIR"/player_database.py  "$INSTALL_DIR/"
 cp "$SRC_DIR"/player_entry.py     "$INSTALL_DIR/"
 cp "$SRC_DIR"/play_action.py      "$INSTALL_DIR/"
+cp "$SRC_DIR"/countdown.py        "$INSTALL_DIR/"
 cp "$SRC_DIR"/udp_sockets.py      "$INSTALL_DIR/"
 
 # Create a convenient command in /usr/local/bin called "photon"
