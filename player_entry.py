@@ -5,113 +5,24 @@ It intentionally keeps database/UDP logic outside of the UI so the team's
 existing database and socket code can be connected with ``on_player_added``.
 """
 
-from dataclasses import dataclass
 from typing import Callable, Optional
 
 import pygame
 
-from game_start_countdown import GameStartCountdown
-from play_action import PlayActionScreen
+from player_database import Player
+from screen_manager import Screen, WINDOW_WIDTH, WINDOW_HEIGHT
+from ui_elements import Button, TextInput, PANEL, TEXT, MUTED_TEXT
 
 
-WINDOW_WIDTH = 1100
-WINDOW_HEIGHT = 720
-FPS = 60
-
-BACKGROUND = (8, 8, 10)
-PANEL = (22, 22, 28)
-TEXT = (235, 235, 235)
-MUTED_TEXT = (165, 165, 170)
-BORDER = (80, 80, 90)
-INPUT_BG = (245, 245, 245)
-INPUT_TEXT = (25, 25, 25)
 RED = (135, 26, 32)
 RED_HOVER = (170, 34, 41)
 GREEN = (31, 112, 53)
 GREEN_HOVER = (40, 142, 67)
-BLUE = (80, 105, 255)
 ERROR = (235, 95, 95)
 SUCCESS = (100, 220, 130)
 
-INPUT_DISABLED = (195, 195, 195)
 
-
-@dataclass
-class Player:
-    player_id: int
-    equipment_id: int
-    codename: str
-    team: str
-    
-    def set_codename(self, codename):
-        self.codename = codename
-
-
-class TextInput:
-    def __init__(self, rect: pygame.Rect, placeholder: str, numeric_only: bool = False, max_length: int = 20, enabled=True):
-        self.rect = rect
-        self.placeholder = placeholder
-        self.numeric_only = numeric_only
-        self.max_length = max_length
-        self.text = ""
-        self.active = False
-        self.enabled = enabled
-
-    def handle_event(self, event: pygame.event.Event) -> None:
-        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            self.active = self.rect.collidepoint(event.pos)
-        elif event.type == pygame.KEYDOWN and self.active:
-            if event.key == pygame.K_BACKSPACE:
-                self.text = self.text[:-1]
-            elif event.key in (pygame.K_RETURN, pygame.K_TAB):
-                self.active = False
-            elif len(self.text) < self.max_length and event.unicode and event.unicode.isprintable():
-                if not self.numeric_only or event.unicode.isdigit():
-                    self.text += event.unicode
-
-    def draw(self, surface: pygame.Surface, font: pygame.font.Font) -> None:
-        if self.enabled:
-            pygame.draw.rect(surface, INPUT_BG, self.rect, border_radius=4)
-            if self.text:
-                value = self.text
-                color = INPUT_TEXT
-            else:
-                value = self.placeholder
-                color = (125, 125, 125)
-        else:
-            pygame.draw.rect(surface, INPUT_DISABLED, self.rect, border_radius=4)
-            value = "UNAVAILABLE"
-            color = (125, 125, 125)
-            
-        pygame.draw.rect(surface, BLUE if self.active else BORDER, self.rect, 2, border_radius=4)
-        
-        rendered = font.render(value, True, color)
-        surface.blit(rendered, (self.rect.x + 12, self.rect.centery - rendered.get_height() // 2))
-
-
-class Button:
-    def __init__(self, rect: pygame.Rect, text: str, normal, hover):
-        self.rect = rect
-        self.text = text
-        self.normal = normal
-        self.hover = hover
-
-    def draw(self, surface: pygame.Surface, font: pygame.font.Font, mouse_pos) -> None:
-        color = self.hover if self.rect.collidepoint(mouse_pos) else self.normal
-        pygame.draw.rect(surface, color, self.rect, border_radius=6)
-        pygame.draw.rect(surface, BORDER, self.rect, 1, border_radius=6)
-        label = font.render(self.text, True, TEXT)
-        surface.blit(label, label.get_rect(center=self.rect.center))
-
-    def clicked(self, event: pygame.event.Event) -> bool:
-        return (
-            event.type == pygame.MOUSEBUTTONDOWN
-            and event.button == 1
-            and self.rect.collidepoint(event.pos)
-        )
-
-
-class PlayerEntryScreen:
+class PlayerEntryScreen(Screen):
     """Pygame UI for adding players to red and green teams.
 
     ``on_player_added`` is called after a player passes validation.  The team
@@ -120,23 +31,22 @@ class PlayerEntryScreen:
     UI file.
     """
 
+    caption = "Photon - Player Entry"
+
     def __init__(
         self,
+        manager,
         on_player_added: Optional[Callable[[Player], bool]] = None,
         on_ip_changed: Optional[Callable[[str], bool]] = None
     ):
-        pygame.display.set_caption("Photon - Player Entry")
-        self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
-        self.clock = pygame.time.Clock()
+        super().__init__(manager)
 
-        self.title_font = pygame.font.SysFont("arial", 36, bold=True)
         self.heading_font = pygame.font.SysFont("arial", 25, bold=True)
         self.font = pygame.font.SysFont("arial", 20)
-        self.small_font = pygame.font.SysFont("arial", 16)
 
         self.on_player_added = on_player_added
         self.on_ip_changed = on_ip_changed
-        self.players: list[Player] = []
+        self.players: list[Player] = manager.players  # shared with the other screens
         self.team = "Red"
         self.message = ("Enter an equipment ID and codename." if on_player_added is not None else "Offline demo: players are not saved to PostgreSQL.")
 
@@ -225,12 +135,7 @@ class PlayerEntryScreen:
         self.message_color = color
 
     def _draw_header(self) -> None:
-        title = self.title_font.render("PHOTON PLAYER ENTRY", True, TEXT)
-        self.screen.blit(title, title.get_rect(center=(WINDOW_WIDTH // 2, 62)))
-        subtitle = self.small_font.render(
-            "Add players before starting the game", True, MUTED_TEXT
-        )
-        self.screen.blit(subtitle, subtitle.get_rect(center=(WINDOW_WIDTH // 2, 98)))
+        self.draw_header("PHOTON PLAYER ENTRY", "Add players before starting the game")
 
     def _draw_form(self) -> None:
         label_player_id = self.font.render("Player ID", True, TEXT)
@@ -301,96 +206,70 @@ class PlayerEntryScreen:
         self.codename_input.text = ""
         self._set_message("All player entries cleared.", MUTED_TEXT)
 
-    def start_game(self) -> str:
-        """Start countdown first, then show play action using the same window."""
+    def start_game(self) -> Optional[str]:
+        """Ask the screen manager to start the countdown, then play action."""
         if not self.players:
             self._set_message("Add at least one player before starting.", ERROR)
-            return "back"
+            return None
 
-        # Separate pre-game stage. A teammate can change countdown.py without
-        # needing to edit this screen or the play-action screen.
-        countdown_screen = GameStartCountdown(self.screen, self.clock)
-        countdown_result = countdown_screen.run()
-        if countdown_result != "complete":
-            pygame.display.set_caption("Photon - Player Entry")
-            return countdown_result  # 'back' (ESC) or 'quit' (window closed)
+        # The countdown and play-action screens are separate files, so a
+        # teammate can change them without editing this screen.
+        return "countdown"
 
-        action_screen = PlayActionScreen(self.players, self.screen, self.clock)
-        action_result = action_screen.run()
-        pygame.display.set_caption("Photon - Player Entry")
-        return action_result
+    def update(self) -> Optional[str]:
+        # Only allow a codename to be typed once a usable player ID is entered.
+        player_id_text = self.player_id_input.text.strip()
+        if not player_id_text or int(player_id_text) <= 0 or any(player.player_id == int(player_id_text) for player in self.players):
+            self.codename_input.enabled = False
+        else:
+            self.codename_input.enabled = True
+        return None
 
-    def run(self) -> None:
-        running = True
-        while running:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    running = False
-                elif event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_ESCAPE:
-                        running = False
-                    elif event.key == pygame.K_F5:
-                        if self.start_game() == "quit":
-                            running = False
-                            break
-                    elif event.key == pygame.K_F12:
-                        # Clear this game's roster without deleting database records.
-                        self.players.clear()
-                        self.player_id_input.text = ""
-                        self.equipment_input.text = ""
-                        self.codename_input.text = ""
-                        self._set_message("Player list cleared.", MUTED_TEXT)
+    def handle_event(self, event: pygame.event.Event) -> Optional[str]:
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                return "quit"
+            elif event.key == pygame.K_F5:
+                return self.start_game()
+            elif event.key == pygame.K_F12:
+                # Clear this game's roster without deleting database records.
+                self.players.clear()
+                self.player_id_input.text = ""
+                self.equipment_input.text = ""
+                self.codename_input.text = ""
+                self._set_message("Player list cleared.", MUTED_TEXT)
 
-                player_id_text = self.player_id_input.text.strip()
-                if not player_id_text or int(player_id_text) <= 0 or any(player.player_id == int(player_id_text) for player in self.players):
-                    self.codename_input.enabled = False
-                else: 
-                    self.codename_input.enabled = True
+        self.player_id_input.handle_event(event)
+        self.equipment_input.handle_event(event)
+        self.ipaddress_input.handle_event(event)
 
-                self.player_id_input.handle_event(event)
-                self.equipment_input.handle_event(event)
-                self.ipaddress_input.handle_event(event)
-                
-                if self.codename_input.enabled:
-                    self.codename_input.handle_event(event)
+        if self.codename_input.enabled:
+            self.codename_input.handle_event(event)
 
-                if self.red_button.clicked(event):
-                    self.team = "Red"
-                elif self.green_button.clicked(event):
-                    self.team = "Green"
-                elif self.add_button.clicked(event):
-                    self.add_player()
-                elif self.clear_button.clicked(event):
-                    self.clear_players()
-                elif self.start_button.clicked(event):
-                    if self.start_game() == "quit":
-                        running = False
-                        break
-                elif self.ip_button.clicked(event):
-                    self._change_network_address()
-                elif event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
-                    if not self.equipment_input.active and not self.codename_input.active:
-                        self.add_player()
+        if self.red_button.clicked(event):
+            self.team = "Red"
+        elif self.green_button.clicked(event):
+            self.team = "Green"
+        elif self.add_button.clicked(event):
+            self.add_player()
+        elif self.clear_button.clicked(event):
+            self.clear_players()
+        elif self.start_button.clicked(event):
+            return self.start_game()
+        elif self.ip_button.clicked(event):
+            self._change_network_address()
+        elif event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
+            if not self.equipment_input.active and not self.codename_input.active:
+                self.add_player()
+        return None
 
-            self.screen.fill(BACKGROUND)
-            self._draw_header()
-            self._draw_form()
-            self._draw_rosters()
-            footer_text = "F5 = Start game | F12 = Clear players | ESC = Exit"
+    def draw(self) -> None:
+        self.draw_background()
+        self._draw_header()
+        self._draw_form()
+        self._draw_rosters()
+        footer_text = "F5 = Start game | F12 = Clear players | ESC = Exit"
 
-            footer = self.small_font.render(footer_text, True, MUTED_TEXT)
-            self.screen.blit(footer, (20, WINDOW_HEIGHT - 30))
-
-            pygame.display.flip()
-            self.clock.tick(FPS)
-
-
-def run_player_entry(
-    on_player_added: Optional[Callable[[Player], bool]] = None,
-    on_ip_changed: Optional[Callable[[str], bool]] = None,
-) -> None:
-    PlayerEntryScreen(
-        on_player_added=on_player_added,
-        on_ip_changed=on_ip_changed
-    ).run()
+        footer = self.small_font.render(footer_text, True, MUTED_TEXT)
+        self.screen.blit(footer, (20, WINDOW_HEIGHT - 30))
 

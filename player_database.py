@@ -1,16 +1,29 @@
+from dataclasses import dataclass
+import os
+
 try:
     import psycopg2
 except ImportError:
     # Allow the Pygame UI to launch in offline/demo mode without this driver.
     psycopg2 = None
 
-# Define connection parameters 
+@dataclass
+class Player:
+    player_id: int
+    equipment_id: int
+    codename: str
+    team: str
+    
+    def set_codename(self, codename):
+        self.codename = codename
+
+# Define connection parameters (override with PHOTON_DB_* environment variables)
 connection_params = {
-    "dbname":   "photon",
-    "user":     "student",
-    "password": "student",
-    "host":     "127.0.0.1",
-    "port":     "5432",
+    "dbname":   os.environ.get("PHOTON_DB_NAME", "photon"),
+    "user":     os.environ.get("PHOTON_DB_USER", "student"),
+    "password": os.environ.get("PHOTON_DB_PASSWORD", "student"),
+    "host":     os.environ.get("PHOTON_DB_HOST", "127.0.0.1"),
+    "port":     os.environ.get("PHOTON_DB_PORT", "5432"),
 }
 
 class playerDatabase:
