@@ -10,21 +10,25 @@ Gameplay events/scoring are not implemented yet.
 2. Install the Python dependencies:
 
    ```bash
-   python3 -m pip install pygame psycopg2-binary
+   python3 -m pip install -r requirements.txt
    ```
 
    On Windows, use `py -m pip ...` if `python3` is not available.
 3. Start the application:
 
    ```bash
-   python3 main.py
+   python3 src/main.py
    ```
 
-   On Windows, use `py main.py` as appropriate.
+   On Windows, use `py src/main.py` as appropriate.
 
 The PostgreSQL driver is optional for a local UI demonstration; without a
 working PostgreSQL connection, players exist only in the running program.
 A database connection is required to save players to PostgreSQL.
+
+The connection defaults to `photon` / `student` / `student` on `127.0.0.1:5432`.
+To use different settings, set `PHOTON_DB_NAME`, `PHOTON_DB_USER`,
+`PHOTON_DB_PASSWORD`, `PHOTON_DB_HOST`, or `PHOTON_DB_PORT` before starting.
 
 ## Controls
 
