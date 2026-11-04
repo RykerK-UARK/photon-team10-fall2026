@@ -36,11 +36,12 @@ To use different settings, set `PHOTON_DB_NAME`, `PHOTON_DB_USER`,
 - Click **ADD PLAYER** to add the player to the roster.
 - Click **START GAME** or press **F5** to open the **countdown screen** first.
   After 30 seconds, the play-action screen opens automatically with both team rosters.
-- During the countdown, press **ESC** to cancel and go back to player entry.
+- During the countdown, press **ESC** to cancel and go back to player entry, or
+  **SPACE** to skip it.
 - On the play-action screen, click **BACK TO ENTRY** or press **ESC** to return.
 - On the player-entry screen, click **CLEAR ALL PLAYERS** or press **F12** to
-  clear player entries. When connected, this also clears the PostgreSQL players
-  table. Clearing is never automatic on exit.
+  clear the on-screen roster. This does not delete anything from the PostgreSQL
+  players table.
 
 ## Linux installation script
 
@@ -56,13 +57,11 @@ or Windows, use the local Python instructions above instead.
 
 ## Modifying the countdown
 
-The countdown lives entirely in `countdown.py` in the `run_countdown(screen, clock)`
-function. It uses the existing Pygame display and clock, so a replacement can
-change the images, sounds, or animation without altering `player_entry.py` or
-`play_action.py`. Keep these three return values in the replacement:
+The default countdown is `GameStartCountdown` in `src/game_start_countdown.py`,
+which shows the images in `assets/countdown_images/`. A text-only alternative,
+`GameCountdown` in `src/countdown.py`, can be swapped in by changing the import
+and the `register("countdown", ...)` line in `src/main.py`.
 
-- `"complete"` when the countdown finishes and play action should open.
-- `"back"` when the operator cancels and returns to player entry.
-- `"quit"` when the window is closed.
-
-The `install.sh` script includes `countdown.py` for Linux installations.
+A countdown is a `Screen` that returns `"play_action"` when it finishes and
+`"player_entry"` when cancelled. The `install.sh` script copies the whole `src`
+and `assets` folders.
