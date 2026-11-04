@@ -5,7 +5,7 @@ from pathlib import Path
 import pygame
 from player_database import playerDatabase
 from player_entry import PlayerEntryScreen
-from game_start_countdown import GameStartCountdown
+from countdown import GameCountdown
 from play_action import PlayActionScreen
 from screen_manager import Screen, ScreenManager
 from udp_sockets import broadcast_code, poll_receive, set_network_address, get_network_address, close_sockets
@@ -88,7 +88,7 @@ def main() -> None:
             on_player_added=add_player if connected else None,
             on_ip_changed=set_network_address
         ))
-        manager.register("countdown", GameStartCountdown(manager))
+        manager.register("countdown", GameCountdown(manager))
         manager.register("play_action", PlayActionScreen(manager))
         manager.run("splash")
         

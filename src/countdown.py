@@ -1,77 +1,80 @@
 """Pre-game countdown screen, independent of the play-action display.
 
-Flow: player entry -> run_countdown(...) -> play action.
+Flow: player entry -> countdown -> play action.
 
-This function is intentionally self-contained so the team can replace its
+This screen is intentionally self-contained so the team can replace its
 simple text countdown with images, sounds, or a more elaborate countdown
 without changing the player-entry screen or the play-action screen.
 """
 
+from typing import Optional
+
 import pygame
+
+from screen_manager import Screen
+from ui_elements import BACKGROUND, PANEL, TEXT, MUTED_TEXT, BORDER
 
 
 COUNTDOWN_SECONDS = 30
-FPS = 60
-BACKGROUND = (8, 8, 10)
-PANEL = (22, 22, 28)
-TEXT = (235, 235, 235)
-MUTED = (165, 165, 170)
-BORDER = (80, 80, 90)
 
 
-def run_countdown(
-    screen: pygame.Surface,
-    clock: pygame.time.Clock,
-    seconds: int = COUNTDOWN_SECONDS,
-) -> str:
-    """Display the countdown, then return control to the player-entry screen.
+class GameCountdown(Screen):
+    """Display the countdown, then hand control to the next screen.
 
-    Returns:
-        'complete': countdown finished; load the play-action screen.
-        'back':     ESC pressed; return to player entry without starting.
-        'quit':     the window was closed; shut down the application.
+    Returns (through handle_event/update):
+        'play_action':   countdown finished (or SPACE pressed for testing).
+        'player_entry':  ESC pressed; return to player entry without starting.
 
-    Keep this return contract when replacing the countdown implementation.
     Don't call pygame.init(), set_mode(), or pygame.quit() here: all screens
     share the application's existing Pygame window.
     """
-    pygame.display.set_caption("Photon - Game Countdown")
-    title_font = pygame.font.SysFont("arial", 38, bold=True)
-    number_font = pygame.font.SysFont("arial", 128, bold=True)
-    small_font = pygame.font.SysFont("arial", 20)
 
-    started_at_ms = pygame.time.get_ticks()
+    caption = "Photon - Game Countdown"
 
-    while True:
-        # Process events every frame to keep the app responsive.
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                return "quit"
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                return "back"
+    def __init__(self, manager, seconds: int = COUNTDOWN_SECONDS):
+        super().__init__(manager)
+        self.seconds = seconds
+        self.heading_font = pygame.font.SysFont("arial", 38, bold=True)
+        self.number_font = pygame.font.SysFont("arial", 128, bold=True)
+        self.hint_font = pygame.font.SysFont("arial", 20)
+        self.started_at_ms = 0
 
+    def on_enter(self) -> None:
+        # Restart the countdown every time this screen is opened.
+        self.started_at_ms = pygame.time.get_ticks()
+
+    def _remaining(self) -> int:
         # Use real elapsed milliseconds instead of assuming a fixed frame rate.
-        elapsed_ms = max(0, pygame.time.get_ticks() - started_at_ms)
-        remaining = max(0, seconds - elapsed_ms // 1000)
-        if remaining == 0:
-            return "complete"
+        elapsed_ms = max(0, pygame.time.get_ticks() - self.started_at_ms)
+        return max(0, self.seconds - elapsed_ms // 1000)
 
-        width, height = screen.get_size()
-        screen.fill(BACKGROUND)
+    def handle_event(self, event: pygame.event.Event) -> Optional[str]:
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+            return "player_entry"
+        # SPACE skips the countdown (for testing).
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+            return "play_action"
+        return None
+
+    def update(self) -> Optional[str]:
+        if self._remaining() == 0:
+            return "play_action"
+        return None
+
+    def draw(self) -> None:
+        width, height = self.screen.get_size()
+        self.screen.fill(BACKGROUND)
 
         panel = pygame.Rect(0, 0, 650, 360)
         panel.center = (width // 2, height // 2)
-        pygame.draw.rect(screen, PANEL, panel, border_radius=14)
-        pygame.draw.rect(screen, BORDER, panel, width=2, border_radius=14)
+        pygame.draw.rect(self.screen, PANEL, panel, border_radius=14)
+        pygame.draw.rect(self.screen, BORDER, panel, width=2, border_radius=14)
 
-        heading = title_font.render("GAME STARTS IN", True, TEXT)
-        screen.blit(heading, heading.get_rect(center=(width // 2, height // 2 - 105)))
+        heading = self.heading_font.render("GAME STARTS IN", True, TEXT)
+        self.screen.blit(heading, heading.get_rect(center=(width // 2, height // 2 - 105)))
 
-        number = number_font.render(f"00:{remaining:02d}", True, TEXT)
-        screen.blit(number, number.get_rect(center=(width // 2, height // 2 + 10)))
+        number = self.number_font.render(f"00:{self._remaining():02d}", True, TEXT)
+        self.screen.blit(number, number.get_rect(center=(width // 2, height // 2 + 10)))
 
-        hint = small_font.render("ESC = Return to Player Entry", True, MUTED)
-        screen.blit(hint, hint.get_rect(center=(width // 2, height // 2 + 135)))
-
-        pygame.display.flip()
-        clock.tick(FPS)
+        hint = self.hint_font.render("ESC = Return to Player Entry", True, MUTED_TEXT)
+        self.screen.blit(hint, hint.get_rect(center=(width // 2, height // 2 + 135)))
