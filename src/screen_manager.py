@@ -57,6 +57,7 @@ class ScreenManager:
 
     def __init__(self):
         pygame.init()
+        pygame.mixer.init()
         self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
         self.clock = pygame.time.Clock()
 

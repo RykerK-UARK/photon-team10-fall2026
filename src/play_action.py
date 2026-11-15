@@ -14,9 +14,11 @@ The existing Player Entry -> 30-second Countdown -> Player Action transition
 remains unchanged. This file contains no network, music, or timer logic.
 """
 
+from pathlib import Path
 from typing import Optional
 
 import pygame
+import random
 
 from screen_manager import Screen
 from ui_elements import BACKGROUND, BORDER, MUTED_TEXT, PANEL, TEXT, Button
@@ -30,10 +32,10 @@ YELLOW = (246, 192, 78)
 # Gameplay and display settings. Keeping these values together makes them
 # easy to adjust without searching through the rendering code.
 POINTS_PER_TAG = 10
-BASE_HIT_CODES = {43, 53}  # Reserved base IDs; base scoring is not implemented yet.
-MAX_LOG_ENTRIES = 250       # Keep only the most recent 250 events in memory.
-VISIBLE_LOG_ROWS = 7       # Number of event entries displayed without scrolling.
-
+BASE_HIT_CODES = {43, 53} # Reserved base IDs; base scoring is not implemented yet.
+MAX_LOG_ENTRIES = 250     # Keep only the most recent 250 events in memory.
+VISIBLE_LOG_ROWS = 7      # Number of event entries displayed without scrolling.
+PLAY_TIME = 360000        # Time that the game will run for in miliseconds.
 
 class PlayActionScreen(Screen):
     """Manage game events and render the play-by-play gameplay screen.
@@ -78,6 +80,12 @@ class PlayActionScreen(Screen):
             (78, 82, 92),
         )
 
+        # Initialize timer variables so that the screen manager can access them before they are assigned values.
+        self.start_time = None
+        self.current_time = None
+
+        self.music_tracks = [f"Track0{i}.mp3" for i in range(1, 9)]
+
     def on_enter(self) -> None:
         """Prepare a fresh match when the countdown transitions to this screen.
 
@@ -100,8 +108,19 @@ class PlayActionScreen(Screen):
         # TODO (RK - network integration): The networking/controller code
         # owns any game-start signal. The screen does not send UDP messages.
 
-        # TODO (JH - timer): Initialize the six-minute gameplay clock here.
-        # This method is called AFTER the separate 30-second countdown.
+        # Record time of entering play_action screen for 6 minute timer.
+        self.start_time = pygame.time.get_ticks()
+        
+        # Generate a pseudo-random number and then play the corresponding music track.
+        rng = random.Random(self.start_time)
+        track_name = rng.choice(self.music_tracks)
+        
+        # Resolve file path of track
+        track_path = Path(__file__).resolve().parent.parent / "assets" / "countdown_images" / track_name
+
+        # Load and play the selected track
+        pygame.mixer.music.load(track_path)
+        pygame.mixer.music.play()
 
     def team_score(self, team: str) -> int:
         """Sum the individual scores of all players on the requested team.
@@ -189,6 +208,11 @@ class PlayActionScreen(Screen):
         """
         # TODO (JH - timer): Update the six-minute gameplay timer and end the
         # match here when it expires; the 30-second pregame timer is separate.
+        self.current_time = pygame.time.get_ticks() - self.start_time
+        if self.current_time <= PLAY_TIME:
+            # Update UDP stuffs
+        else:
+            pygame.mixer.music.stop()
         return None
 
     def handle_event(self, event: pygame.event.Event) -> Optional[str]:
@@ -200,8 +224,10 @@ class PlayActionScreen(Screen):
         """
         # Screen transitions are requested by returning the destination name.
         if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+            pygame.mixer.music.stop()
             return "player_entry"
         if self.back_button.clicked(event):
+            pygame.mixer.music.stop()
             return "player_entry"
 
         # Clamp scrolling so the feed cannot move past its first/last row.
