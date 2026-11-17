@@ -85,7 +85,7 @@ def main() -> None:
         manager.register("splash", SplashScreen(manager))
         manager.register("player_entry", PlayerEntryScreen(
             manager,
-            on_player_added=add_player if connected else None,
+            on_player_added=(lambda player: add_player(player, manager.players)) if connected else None,
             on_ip_changed=set_network_address
         ))
         manager.register("countdown", GameStartCountdown(manager))
@@ -104,7 +104,8 @@ def main() -> None:
 ### Socket Section Start ###
 
 # Add a player to PostgreSQL, then announces the equipment ID to the UDP server
-def add_player(player):  # player_id, codename, equipment_id
+# Raises ValueError if the codename already belongs to a different player ID.
+def add_player(player, roster):  # player_id, codename, equipment_id
     if database.conn is None or database.cursor is None:
         return False
 
@@ -113,15 +114,23 @@ def add_player(player):  # player_id, codename, equipment_id
     equipment_id = player.equipment_id    
     codename = player.codename
 
-    if database.get_player(player_id) != None: # player already in database
-        player.set_codename(database.get_player(player_id)[1])
-        broadcast_code(equipment_id)
-        return True
-        
-    if not codename:
+    saved_player = database.get_player(player_id)
+    if saved_player != None: # player already in database
+        codename = saved_player[1]
+    elif not codename:
         return False
         
-    database.add_player(player_id, codename)
+    elif database.get_player_by_codename(codename) is not None:
+        raise ValueError(f"Codename {codename} is already used by another player ID.")
+
+    # The codename may also belong to a player already in this game.
+    if any(other.codename.casefold() == codename.casefold() for other in roster):
+        raise ValueError(f"Codename {codename} is already used by another player ID.")
+
+    if saved_player != None:
+        player.set_codename(codename)
+    else:
+        database.add_player(player_id, codename)
     broadcast_code(equipment_id)
     return True
 
