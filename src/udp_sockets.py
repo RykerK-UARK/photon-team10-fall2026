@@ -49,6 +49,37 @@ def poll_receive():
     except ValueError:
         return None  # Bad packet
 
+# Handles Fire Cases
+def handle_fire(result) -> None:
+    # Do nothing if either a bad packet or no packet
+    if result is None:
+        return
+        
+    # Split values into respective variables for comparing
+    shooter, hit = result
+    
+    # Base hit:
+    if hit == 43 or hit == 53:
+        #===========================
+        #    Needed Work Here
+        #===========================
+        return
+        
+    # Set Bools to team sides (Red = Odd, Green = Even) 
+    Team_A = (shooter % 2 == 1) # True if shooter is Red
+    Team_B = (hit % 2 == 1) # True if hit player is Red
+    
+    # Check Non-Friendly Fire
+    if Team_A != Team_B:
+        # (Award Points)
+        broadcast_code(hit)
+        return
+        
+    # Friendly Fire
+    else:
+        # (Deduct Points)
+        broadcast_code(shooter)
+        broadcast_code(hit)
 
 def close_sockets() -> None:
     broadcast.close()
