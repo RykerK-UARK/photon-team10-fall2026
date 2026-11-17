@@ -1,86 +1,61 @@
-#    This File Include all the udp socket information    #
 import socket
 import ipaddress
 
-BROADCAST_PORT = 7500
-RECEIVE_PORT = 7501
-
-network_address = "127.0.0.1"
-
-# Broadcast socket
-broadcast = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-broadcast.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-
-# Receiving socket (SO_REUSEADDR must be set before bind to take effect)
-receive = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-receive.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-receive.bind(("0.0.0.0", RECEIVE_PORT))
-receive.setblocking(False)
-
-def get_network_address() -> str:
-    return network_address
-
-
-def set_network_address(new_address: str) -> bool:
-    global network_address
-    try:
-        ipaddress.ip_address(new_address)
-    except ValueError:
-        return False
-    network_address = new_address
-    return True
-
-
-def broadcast_code(code) -> None:
-    try:
-        broadcast.sendto(str(code).encode("utf-8"), (network_address, BROADCAST_PORT))
-    except ConnectionRefusedError:
-        return
-
-
-def poll_receive():
-    try:
-        data, _ = receive.recvfrom(1024)
-    except BlockingIOError:
-        return None  # Nothing = waiting
-    try:
-        shooter, hit = data.decode("utf-8").split(":")
-        return int(shooter), int(hit)
-    except ValueError:
-        return None  # Bad packet
-
-# Handles Fire Cases
-def handle_fire(result) -> None:
-    # Do nothing if either a bad packet or no packet
-    if result is None:
-        return
+class UDPSocketPair:
+    def __init__(self, network_address: str  = "127.0.0.1", broadcast_port: str = 7500, receive_port: str = 7501) -> None:
+        # Attributes
+        self.network_address = network_address
+        self.broadcast_port = broadcast_port
+        self.receive_port = receive_port
+        self.buffer = None
         
-    # Split values into respective variables for comparing
-    shooter, hit = result
-    
-    # Base hit:
-    if hit == 43 or hit == 53:
-        #===========================
-        #    Needed Work Here
-        #===========================
-        return
+        # Broadcast Socket Setup
+        self.broadcast_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.broadcast_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         
-    # Set Bools to team sides (Red = Odd, Green = Even) 
-    Team_A = (shooter % 2 == 1) # True if shooter is Red
-    Team_B = (hit % 2 == 1) # True if hit player is Red
-    
-    # Check Non-Friendly Fire
-    if Team_A != Team_B:
-        # (Award Points)
-        broadcast_code(hit)
-        return
-        
-    # Friendly Fire
-    else:
-        # (Deduct Points)
-        broadcast_code(shooter)
-        broadcast_code(hit)
+        # Receiving Socket Setup
+        self.receive_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.receive_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) # SO_REUSEADDR must be set before bind to take effect
+        self.receive_socket.bind(("0.0.0.0", self.receive_port))
+        self.receive_socket.setblocking(False)
 
-def close_sockets() -> None:
-    broadcast.close()
-    receive.close()
+    def get_network_address() -> str:
+        return self.network_address
+        
+    def set_network_address(self, new_address: str) -> bool:
+        try:
+            ipaddress.ip_address(new_address)
+        except ValueError:
+            return False
+        self.network_address = new_address
+        return True
+
+    def broadcast(self, data: str) -> None:
+        try:
+            self.broadcast_socket.sendto(str(data).encode("utf-8"), (self.network_address, self.broadcast_port))
+        except ConnectionRefusedError:
+            return
+            
+    def _receive(self) -> str:
+        try:
+            data, _ = self.receive_socket.recvfrom(1024)
+        except BlockingIOError:
+            return None  # Nothing = waiting
+        
+        return data.decode("utf-8")
+        
+    def read_buffer(self) -> str:
+        buffer_data = self.buffer
+        self.buffer = None
+        return buffer_data
+        
+    def update(self) -> None:
+        data = self._receive()
+        if data is None:
+            return
+        self.buffer = data
+
+    def close(self) -> None:
+        self.broadcast_socket.close()
+        self.receive_socket.close()
+

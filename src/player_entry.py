@@ -33,22 +33,16 @@ class PlayerEntryScreen(Screen):
 
     caption = "Photon - Player Entry"
 
-    def __init__(
-        self,
-        manager,
-        on_player_added: Optional[Callable[[Player], bool]] = None,
-        on_ip_changed: Optional[Callable[[str], bool]] = None
-    ):
+    def __init__(self, manager):
         super().__init__(manager)
 
         self.heading_font = pygame.font.SysFont("arial", 25, bold=True)
         self.font = pygame.font.SysFont("arial", 20)
-
-        self.on_player_added = on_player_added
-        self.on_ip_changed = on_ip_changed
+        
         self.players: list[Player] = manager.players  # shared with the other screens
         self.team = "Red"
-        self.message = ("Enter an equipment ID and codename." if on_player_added is not None else "Offline demo: players are not saved to PostgreSQL.")
+        self.database_connected = self.manager.get_database().conn is not None and self.manager.get_database().cursor is not None
+        self.message = ("Enter an equipment ID and codename." if self.database_connected else "Offline demo: players are not saved to PostgreSQL.")
 
         self.message_color = MUTED_TEXT
 
@@ -71,6 +65,31 @@ class PlayerEntryScreen(Screen):
         self.clear_button = Button(pygame.Rect(270, 645, 240, 42), "CLEAR ALL PLAYERS", (55, 55, 62), (75, 75, 84))
         self.start_button = Button(pygame.Rect(590, 645, 240, 42), "START GAME", GREEN, GREEN_HOVER)
         self.ip_button = Button(pygame.Rect(300, 380, 60, 30), "Apply", (55, 55, 62), (75, 75, 84))
+
+    def _add_player_to_database(self, player) -> None:
+        player_id = player.player_id
+        equipment_id = player.equipment_id    
+        codename = player.codename
+        
+        saved_player = self.manager.get_database().get_player(player_id)
+        
+        # Player is already in database, use existing name and move on
+        if saved_player != None:
+            player.set_codename(saved_player[1])
+            self.manager.get_network().broadcast(equipment_id)
+            return True
+        # Codename not filled and player not found in database
+        elif not codename:
+            return False  
+        # Codename already used by player in database
+        elif self.manager.get_database().get_player_by_codename(codename) is not None:
+            raise ValueError(f"Codename {codename} is already used by another player ID.")
+        
+        # Player is valid and not already in database, added to database and broadcasted    
+        self.manager.get_database().add_player(player_id, codename)
+        self.manager.get_network().broadcast(equipment_id)
+        
+        return True
 
     def add_player(self) -> None:
         player_id_text = self.player_id_input.text.strip()
@@ -100,10 +119,10 @@ class PlayerEntryScreen(Screen):
             self._set_message(f"Equipment ID {equipment_id} is already assigned.", ERROR)
             return
 
-        player = Player(player_id=player_id, equipment_id=equipment_id, codename=codename, team=self.team)
+        player = Player(player_id=player_id, equipment_id=equipment_id, codename=codename, team=self.team, base_hit=False)
 
         # Without a database, the roster is the only place to catch duplicate codenames.
-        if self.on_player_added is None:
+        if not self.database_connected:
             if not codename:
                 self._set_message("Codename is required.", ERROR)
                 return
@@ -112,21 +131,21 @@ class PlayerEntryScreen(Screen):
                 self._set_message(f"Codename {codename} is already used by another player ID.", ERROR)
                 return
 
-        try:
-            if self.on_player_added is not None:
-                if not self.on_player_added(player):
+        else:
+            try:
+                if not self._add_player_to_database(player):
                     if not codename:
                         self._set_message("Player ID not found in database and codename not entered", ERROR)
                     else:
                         self._set_message("PostgreSQL is unavailable", ERROR)
                     return
-        except ValueError as exc:
-            self._set_message(str(exc), ERROR)
-            return
-        except Exception as exc:
-            # Keep the player off the local roster if database/UDP integration fails.
-            self._set_message(f"Could not add player: {exc}", ERROR)
-            return
+            except ValueError as exc:
+                self._set_message(str(exc), ERROR)
+                return
+            except Exception as exc:
+                # Keep the player off the local roster if database/UDP integration fails.
+                self._set_message(f"Could not add player: {exc}", ERROR)
+                return
 
         self.players.append(player)
         self.player_id_input.text = ""
@@ -138,7 +157,8 @@ class PlayerEntryScreen(Screen):
 
     def _change_network_address(self) -> None:
         ipaddress_text = self.ipaddress_input.text.strip()
-        if self.on_ip_changed is not None and self.on_ip_changed(ipaddress_text):
+        
+        if self.manager.get_network().set_network_address(ipaddress_text):
             self._set_message(f"Network Address set to {ipaddress_text}", SUCCESS)
         else:
             self._set_message(f"Invalid IP Address", ERROR)

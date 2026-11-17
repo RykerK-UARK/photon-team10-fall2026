@@ -177,8 +177,24 @@ class PlayActionScreen(Screen):
 
         # Base equipment codes must be interpreted separately from player IDs.
         if target_id in BASE_HIT_CODES:
-            # TODO (RK - base hits): Validate the opposing base, award points
-            # once per player per game, record the event, and mark the icon.
+            # Player has already hit the base before, ignore
+            if shooter.base_hit:
+                return False
+            
+            # Im assuming 43 is red (i=1) and the other one is green since I don't remember
+            # Determine which team's base is being shot
+            targetted_team_base = ""
+            if target_id == BASE_HIT_CODES[1]:
+                targetted_team_base = "Red"
+            else:
+                targetted_team_base = "Green"
+                
+            # Determine if the player is shooting the opposing team's base as they should
+            if shooter.team != targetted_team_base:
+                self.add_points(shooter_id, 100)
+                shooter.base_hit = True
+                return True
+            
             return False
 
         target = self.players_by_equipment.get(target_id)
@@ -188,6 +204,17 @@ class PlayActionScreen(Screen):
         if shooter.team.casefold() == target.team.casefold():
             # TODO (RP - friendly fire): Add the team's friendly-fire rule
             # and log here. Teammate hits are currently ignored entirely.
+            
+            """
+            # Remove points
+            self.add_points(shooter_id, -POINTS_PER_TAG)
+            self.add_points(target_id -POINTS_PER_TAG)
+            
+            # Broadcast both shooter and target ID to disable both
+            self.manager.get_network().broadcast(shooter_id)
+            self.manager.get_network().broadcast(target_id)
+            """
+            
             return False
 
         # Valid opponent tag: score the shooter and show who tagged whom.
@@ -278,12 +305,13 @@ class PlayActionScreen(Screen):
         # Fit up to 15 player rows in this panel at the current window size.
         for index, player in enumerate(roster[:15]):
             y = rect.y + 62 + index * 21
-            player_name = (player.codename or f"Player {player.player_id}")[:18]
+            player_name = ((player.codename if len(player.codename) <= 18 else (player.codename[:18] + "...")) or f"Player {player.player_id}")
             name = self.player_font.render(player_name, True, TEXT)
             self.screen.blit(name, (rect.x + 14, y))
 
-            # TODO (RK - base icon): Draw a persistent base icon by any
-            # player who has successfully hit the opposing base.
+            # Draw a persistent base icon by any player who has successfully hit the opposing base.
+            if player.base_hit:
+                self._draw_base_icon(rect.x + 185, y)
 
             score = self.player_font.render(str(self.scores.get(player.equipment_id, 0)), True, TEXT)
             self.screen.blit(score, score.get_rect(topright=(rect.right - 14, y)))
@@ -291,6 +319,15 @@ class PlayActionScreen(Screen):
         if len(roster) > 15:
             extra = self.player_font.render(f"+{len(roster) - 15} more players", True, MUTED_TEXT)
             self.screen.blit(extra, (rect.x + 14, rect.bottom - 20))
+
+    def _draw_base_icon(self, x, y) -> None:
+        # Load the base icon image from the assets folder.
+        image_path = Path(__file__).resolve().parent.parent / "assets" / "baseicon.jpg"
+        image = pygame.image.load(str(image_path)).convert()
+        image = pygame.transform.smoothscale(image, (20, 15))
+        
+        # Draw on screen
+        self.screen.blit(image, (x, y))
 
     def _draw_feed(self) -> None:
         """Draw the center panel showing the current page of match events."""
