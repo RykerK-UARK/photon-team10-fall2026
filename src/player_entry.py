@@ -103,11 +103,14 @@ class PlayerEntryScreen(Screen):
         player = Player(player_id=player_id, equipment_id=equipment_id, codename=codename, team=self.team)
 
         # Without a database, the roster is the only place to catch duplicate codenames.
-        if self.on_player_added is None and codename and any(
-            other.codename.casefold() == codename.casefold() for other in self.players
-        ):
-            self._set_message(f"Codename {codename} is already used by another player ID.", ERROR)
-            return
+        if self.on_player_added is None:
+            if not codename:
+                self._set_message("Codename is required.", ERROR)
+                return
+            # The roster is the only place left to catch duplicate codenames.
+            if any(other.codename.casefold() == codename.casefold() for other in self.players):
+                self._set_message(f"Codename {codename} is already used by another player ID.", ERROR)
+                return
 
         try:
             if self.on_player_added is not None:
