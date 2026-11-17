@@ -116,7 +116,7 @@ class PlayActionScreen(Screen):
         track_name = rng.choice(self.music_tracks)
         
         # Resolve file path of track
-        track_path = Path(__file__).resolve().parent.parent / "assets" / "countdown_images" / track_name
+        track_path = Path(__file__).resolve().parent.parent / "assets" / "photon_tracks" / track_name
 
         # Load and play the selected track
         pygame.mixer.music.load(track_path)
@@ -211,6 +211,7 @@ class PlayActionScreen(Screen):
         self.current_time = pygame.time.get_ticks() - self.start_time
         if self.current_time <= PLAY_TIME:
             # Update UDP stuffs
+            pass
         else:
             pygame.mixer.music.stop()
         return None
