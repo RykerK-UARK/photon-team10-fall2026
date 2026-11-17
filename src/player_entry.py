@@ -102,6 +102,13 @@ class PlayerEntryScreen(Screen):
 
         player = Player(player_id=player_id, equipment_id=equipment_id, codename=codename, team=self.team)
 
+        # Without a database, the roster is the only place to catch duplicate codenames.
+        if self.on_player_added is None and codename and any(
+            other.codename.casefold() == codename.casefold() for other in self.players
+        ):
+            self._set_message(f"Codename {codename} is already used by another player ID.", ERROR)
+            return
+
         try:
             if self.on_player_added is not None:
                 if not self.on_player_added(player):
@@ -110,6 +117,9 @@ class PlayerEntryScreen(Screen):
                     else:
                         self._set_message("PostgreSQL is unavailable", ERROR)
                     return
+        except ValueError as exc:
+            self._set_message(str(exc), ERROR)
+            return
         except Exception as exc:
             # Keep the player off the local roster if database/UDP integration fails.
             self._set_message(f"Could not add player: {exc}", ERROR)
