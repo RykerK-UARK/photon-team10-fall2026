@@ -68,6 +68,18 @@ class playerDatabase:
         )
         return self.cursor.fetchone()
 
+    # Find a player by codename (ignoring case) and return the player row or None
+    def get_player_by_codename(self, codename):
+        self.cursor.execute(
+            """
+            SELECT id, codename
+            FROM public.players
+            WHERE lower(codename) = lower(%s)
+            """,
+            (codename,),
+        )
+        return self.cursor.fetchone()
+
     # Add a new player if the ID is not already in the database
     def add_player(self, player_id, codename):
         if self.get_player(player_id) is not None:
