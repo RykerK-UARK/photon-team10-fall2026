@@ -56,7 +56,7 @@ def handle_fire(result) -> None:
         return
         
     # Split values into respective variables for comparing
-    shooter, hit = result
+    shooter, hit = result.decode("utf-8").split(":")
     
     # Base hit:
     if hit == 43 or hit == 53:
