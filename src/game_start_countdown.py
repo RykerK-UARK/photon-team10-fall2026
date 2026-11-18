@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Optional
 
 import pygame
-
+import random
 from screen_manager import Screen
 from ui_elements import BACKGROUND
 
@@ -57,12 +57,27 @@ class GameStartCountdown(Screen):
         i = (pygame.time.get_ticks() - self.start_time) // self.duration_ms
         if i >= len(self.countdown_images):
             return "play_action"
-
+ 
         # Only reload the image when the countdown moves to the next frame.
         if i != self.image_index:
             self.image_index = i
-            self.change_image(self.countdown_images[30 - i])
+            countdown_number = 30 - i
+            self.change_image(self.countdown_images[countdown_number])
+
+            if countdown_number == 17:
+                track_number = random.randint(1, 8)
+                countdown_sound_path = (
+                    Path(__file__).resolve().parent.parent / "assets" / "photon_tracks" / f"Track{track_number:02d}.mp3"
+                )
+                try:
+                    countdown_sound = pygame.mixer.Sound(str(countdown_sound_path))
+                    countdown_sound.play()
+                except (pygame.error, FileNotFoundError):
+                    return "play_action"  # Skip the countdown if the sound file cannot be loaded.
+                    # If the sound file cannot be loaded, skip playing the sound.
+                    pass
         return None
+    
 
     def draw(self) -> None:
         self.screen.fill(BACKGROUND)

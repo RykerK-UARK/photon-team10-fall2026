@@ -111,17 +111,7 @@ class PlayActionScreen(Screen):
         # Record time of entering play_action screen for 6 minute timer.
         self.start_time = pygame.time.get_ticks()
         
-        # Generate a pseudo-random number and then play the corresponding music track.
-        rng = random.Random(self.start_time)
-        track_name = rng.choice(self.music_tracks)
-        
-        # Resolve file path of track
-        track_path = Path(__file__).resolve().parent.parent / "assets" / "photon_tracks" / track_name
-
-        # Load and play the selected track
-        pygame.mixer.music.load(track_path)
-        pygame.mixer.music.play()
-
+  
     def team_score(self, team: str) -> int:
         """Sum the individual scores of all players on the requested team.
 
