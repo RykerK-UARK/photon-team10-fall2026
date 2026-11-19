@@ -23,6 +23,9 @@ import random
 from screen_manager import Screen
 from ui_elements import BACKGROUND, BORDER, MUTED_TEXT, PANEL, TEXT, Button
 
+# Socket Imports
+from udp_module import poll_receive, broadcast_code
+
 # RGB colors used to distinguish teams and different types of information.
 RED = (231, 74, 83)
 GREEN = (92, 214, 118)
@@ -178,9 +181,12 @@ class PlayActionScreen(Screen):
         if shooter.team.casefold() == target.team.casefold():
             # TODO (RP - friendly fire): Add the team's friendly-fire rule
             # and log here. Teammate hits are currently ignored entirely.
+            broadcast_code(shooter_id)
+            broadcast_code(target_id)
             return False
 
         # Valid opponent tag: score the shooter and show who tagged whom.
+        broadcast_code(target_id)
         self.add_points(shooter_id, POINTS_PER_TAG)
         color = RED if shooter.team.casefold() == "red" else GREEN
         self.record_event(
@@ -200,8 +206,10 @@ class PlayActionScreen(Screen):
         # match here when it expires; the 30-second pregame timer is separate.
         self.current_time = pygame.time.get_ticks() - self.start_time
         if self.current_time <= PLAY_TIME:
-            # Update UDP stuffs
-            pass
+            result = poll_receive()
+            if result is not None:
+                shooter_id, target_id = result
+                self.register_tag(shooter_id, target_id)
         else:
             pygame.mixer.music.stop()
         return None
