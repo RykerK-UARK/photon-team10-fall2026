@@ -23,6 +23,9 @@ import random
 from screen_manager import Screen
 from ui_elements import BACKGROUND, BORDER, MUTED_TEXT, PANEL, TEXT, Button
 
+# Socket Imports
+from udp_sockets import poll_receive, broadcast_code
+
 # RGB colors used to distinguish teams and different types of information.
 RED = (231, 74, 83)
 GREEN = (92, 214, 118)
@@ -42,13 +45,18 @@ class PlayActionScreen(Screen):
 
     The manager calls on_enter() after the countdown, update() each frame,
     handle_event() for keyboard/mouse input, and draw() to render the screen.
-    A separate network controller calls register_tag() as hits arrive.
+    Received hits are passed to register_tag() from update().
     """
 
     caption = "Photon - Player Action"
 
-    def __init__(self, manager):
+    def __init__(self, manager, database=None):
         super().__init__(manager)
+        self.database = database
+        self.game_id = None
+        self.game_over = False
+        self.save_error = False
+        self.unsaved_scores = set()
         # Match data is populated in on_enter(), after player entry/countdown.
         self.players = []
         self.players_by_equipment = {}  # equipment_id -> player; fast hit lookup.
@@ -104,6 +112,16 @@ class PlayActionScreen(Screen):
         self.event_number = 0
         self.log_scroll = 0
         self.record_event("Match started - waiting for tags", BLUE)
+        self.game_id = None
+        self.game_over = False
+        self.save_error = False
+        self.unsaved_scores.clear()
+        if self.database is not None:
+            try:
+                self.game_id = self.database.start_game(self.players)
+            except Exception as exc:
+                self.save_error = True
+                print(f"Could not save game: {exc}")
 
         # TODO (RK - network integration): The networking/controller code
         # owns any game-start signal. The screen does not send UDP messages.
@@ -143,10 +161,38 @@ class PlayActionScreen(Screen):
         Returns False for an unknown equipment ID. Positive and negative point
         amounts are both accepted, so other scoring rules can reuse this helper.
         """
-        if equipment_id not in self.scores:
+        if self.game_over or equipment_id not in self.scores:
             return False
         self.scores[equipment_id] += int(points)
+        if self.game_id is not None:
+            player_id = self.players_by_equipment[equipment_id].player_id
+            try:
+                self.database.update_game_score(self.game_id, player_id, self.scores[equipment_id])
+                self.unsaved_scores.discard(equipment_id)
+            except Exception as exc:
+                self.unsaved_scores.add(equipment_id)
+                print(f"Could not save player score: {exc}")
         return True
+
+    def finish_game(self, status: str) -> None:
+        if self.game_over:
+            return
+        self.game_over = True
+        pygame.mixer.music.stop()
+        if self.game_id is not None:
+            for equipment_id in list(self.unsaved_scores):
+                player_id = self.players_by_equipment[equipment_id].player_id
+                try:
+                    self.database.update_game_score(self.game_id, player_id, self.scores[equipment_id])
+                    self.unsaved_scores.discard(equipment_id)
+                except Exception as exc:
+                    print(f"Could not save player score: {exc}")
+            if not self.unsaved_scores:
+                try:
+                    self.database.finish_game(self.game_id, status)
+                except Exception as exc:
+                    self.save_error = True
+                    print(f"Could not finish game in database: {exc}")
 
     def register_tag(self, shooter_id: int, target_id: int) -> bool:
         """Record one decoded equipment hit; return True if it scored.
@@ -161,6 +207,8 @@ class PlayActionScreen(Screen):
         self-tag, same-team tag, or base code does not award points yet.
         """
         # Resolve the shooter from the roster created during player entry.
+        if self.game_over:
+            return False
         shooter = self.players_by_equipment.get(shooter_id)
         if shooter is None:
             return False
@@ -178,9 +226,12 @@ class PlayActionScreen(Screen):
         if shooter.team.casefold() == target.team.casefold():
             # TODO (RP - friendly fire): Add the team's friendly-fire rule
             # and log here. Teammate hits are currently ignored entirely.
+            broadcast_code(shooter_id)
+            broadcast_code(target_id)
             return False
 
         # Valid opponent tag: score the shooter and show who tagged whom.
+        broadcast_code(target_id)
         self.add_points(shooter_id, POINTS_PER_TAG)
         color = RED if shooter.team.casefold() == "red" else GREEN
         self.record_event(
@@ -190,20 +241,16 @@ class PlayActionScreen(Screen):
         return True
 
     def update(self) -> Optional[str]:
-        """Run screen-only per-frame work; do not access any UDP sockets.
-
-        The networking teammate should call register_tag() from the app's
-        main thread when a decoded hit arrives. draw() renders the new score
-        and feed automatically on the next frame.
-        """
-        # TODO (JH - timer): Update the six-minute gameplay timer and end the
-        # match here when it expires; the 30-second pregame timer is separate.
+        """Process hits during play and finish the game when time expires."""
         self.current_time = pygame.time.get_ticks() - self.start_time
-        if self.current_time <= PLAY_TIME:
-            # Update UDP stuffs
-            pass
-        else:
-            pygame.mixer.music.stop()
+        if self.current_time < PLAY_TIME and not self.game_over:
+            result = poll_receive()
+            if result is not None:
+                shooter_id, target_id = result
+                self.register_tag(shooter_id, target_id)
+        elif not self.game_over:
+            self.finish_game("completed")
+            self.record_event("Match ended - final scores", BLUE)
         return None
 
     def handle_event(self, event: pygame.event.Event) -> Optional[str]:
@@ -215,10 +262,10 @@ class PlayActionScreen(Screen):
         """
         # Screen transitions are requested by returning the destination name.
         if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-            pygame.mixer.music.stop()
+            self.finish_game("cancelled")
             return "player_entry"
         if self.back_button.clicked(event):
-            pygame.mixer.music.stop()
+            self.finish_game("cancelled")
             return "player_entry"
 
         # Clamp scrolling so the feed cannot move past its first/last row.
@@ -335,9 +382,9 @@ class PlayActionScreen(Screen):
         # six-minute game clock. On entry, the 30-second countdown is over.
         center = pygame.Rect(353, 121, 394, 117)
         self._panel(center)
-        status_title = self.small_label_font.render("GAME IN PROGRESS", True, MUTED_TEXT)
+        status_title = self.small_label_font.render("GAME COMPLETE" if self.game_over else "GAME IN PROGRESS", True, MUTED_TEXT)
         self.screen.blit(status_title, status_title.get_rect(center=(center.centerx, 154)))
-        status_text = self.heading_font.render("LIVE GAME", True, BLUE)
+        status_text = self.heading_font.render("FINAL SCORES" if self.game_over else "LIVE GAME", True, BLUE)
         self.screen.blit(status_text, status_text.get_rect(center=(center.centerx, 196)))
 
         # Main content: two player lists with the chronological action feed
@@ -349,5 +396,6 @@ class PlayActionScreen(Screen):
         # Navigation button and event status at the bottom. UDP reception is
         # handled elsewhere; this screen never opens or polls a socket.
         self.back_button.draw(self.screen, self.small_font, pygame.mouse.get_pos())
-        status = self.small_font.render("WAITING FOR GAME EVENTS", True, GREEN)
+        saved = self.game_id is not None and not self.save_error and not self.unsaved_scores
+        status = self.small_font.render("SCORES SAVED" if saved else "SCORES NOT SAVED", True, GREEN if saved else RED)
         self.screen.blit(status, status.get_rect(midright=(1062, 680)))

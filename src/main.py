@@ -8,10 +8,11 @@ from player_entry import PlayerEntryScreen
 from game_start_countdown import GameStartCountdown
 from play_action import PlayActionScreen
 from screen_manager import Screen, ScreenManager
-from udp_sockets import broadcast_code, poll_receive, set_network_address, get_network_address, close_sockets
+from udp_sockets import UDPSocketPair
 
-# Create a database connection for the application
+# Create database and network connections for the application
 database = playerDatabase()
+network = UDPSocketPair()
 
 class SplashScreen(Screen):
     """Display the Photon splash screen before opening player entry.
@@ -78,16 +79,12 @@ class SplashScreen(Screen):
 def main() -> None:
     """Run Splash -> Player Entry -> Countdown -> Play Action using one Pygame session."""
     try:
-        manager = ScreenManager()
+        manager = ScreenManager(database, network)
 
         # The local UI can still be demonstrated when PostgreSQL is offline.
         connected = database.conn is not None and database.cursor is not None
         manager.register("splash", SplashScreen(manager))
-        manager.register("player_entry", PlayerEntryScreen(
-            manager,
-            on_player_added=(lambda player: add_player(player, manager.players)) if connected else None,
-            on_ip_changed=set_network_address
-        ))
+        manager.register("player_entry", PlayerEntryScreen(manager))
         manager.register("countdown", GameStartCountdown(manager))
         manager.register("play_action", PlayActionScreen(manager))
         manager.run("splash")
@@ -97,48 +94,14 @@ def main() -> None:
         #database.clear_players() TESTING ONLY, DO NOT UNCOMMENT HAPHAZORDLY
         
         # TEST: Print current Network Address    
-        #print(get_network_address())
+        # print(get_network_address())
     finally:
         shutdown()
-
-### Socket Section Start ###
-
-# Add a player to PostgreSQL, then announces the equipment ID to the UDP server
-# Raises ValueError if the codename already belongs to a different player ID.
-def add_player(player, roster):  # player_id, codename, equipment_id
-    if database.conn is None or database.cursor is None:
-        return False
-
-    # Get values from the player object
-    player_id = player.player_id
-    equipment_id = player.equipment_id    
-    codename = player.codename
-
-    saved_player = database.get_player(player_id)
-    if saved_player != None: # player already in database
-        codename = saved_player[1]
-    elif not codename:
-        return False
         
-    elif database.get_player_by_codename(codename) is not None:
-        raise ValueError(f"Codename {codename} is already used by another player ID.")
-
-    # The codename may also belong to a player already in this game.
-    if any(other.codename.casefold() == codename.casefold() for other in roster):
-        raise ValueError(f"Codename {codename} is already used by another player ID.")
-
-    if saved_player != None:
-        player.set_codename(codename)
-    else:
-        database.add_player(player_id, codename)
-    broadcast_code(equipment_id)
-    return True
-
-
-# Close sockets
+# Close database and sockets
 def shutdown():
     database.disconnect()
-    close_sockets()
+    network.close()
 
 # Run Main
 if __name__ == "__main__":
