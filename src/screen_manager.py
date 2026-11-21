@@ -55,7 +55,7 @@ class Screen:
 class ScreenManager:
     """Runs the one Pygame loop and switches between registered screens."""
 
-    def __init__(self):
+    def __init__(self, database, network):
         pygame.init()
         pygame.mixer.init()
         self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
@@ -71,6 +71,9 @@ class ScreenManager:
         self.screens: dict[str, Screen] = {}
         self.current: Optional[Screen] = None
         self.running = False
+        
+        self.database = database
+        self.network = network
 
     def register(self, name: str, screen: Screen) -> None:
         self.screens[name] = screen
@@ -82,6 +85,12 @@ class ScreenManager:
         self.current = self.screens[name]
         pygame.display.set_caption(self.current.caption)
         self.current.on_enter()
+        
+    def get_database(self):
+        return self.database
+        
+    def get_network(self):
+        return self.network
 
     def run(self, start_name: str) -> None:
         self.running = True
@@ -104,6 +113,9 @@ class ScreenManager:
             next_screen = self.current.update()
             if next_screen:
                 self.switch_to(next_screen)
+                
+            if self.current == "play_action": # Update UDP network buffer, but only for action screen
+                self.network.update()
 
             self.current.draw()
             pygame.display.flip()

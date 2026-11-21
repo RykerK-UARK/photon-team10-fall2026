@@ -13,6 +13,7 @@ class Player:
     equipment_id: int
     codename: str
     team: str
+    base_hit: bool
     
     def set_codename(self, codename):
         self.codename = codename
