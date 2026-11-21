@@ -18,12 +18,18 @@ class GameStartCountdown(Screen):
         self.image = None
         self.image_index = -1
         self.start_time = 0
+        self.countdown_sound: Optional[pygame.mixer.Sound] = None
 
     def on_enter(self) -> None:
         # Restart the countdown every time this screen is opened.
+        self.stop_countdown_sound()
         self.start_time = pygame.time.get_ticks()
         self.image_index = -1
         self.image = None
+
+    def stop_countdown_sound(self) -> None:
+        if self.countdown_sound is not None:
+            self.countdown_sound = None
 
     def change_image(self, image_name) -> None:
         # Load the Photon image from the assets folder.
@@ -47,6 +53,7 @@ class GameStartCountdown(Screen):
     def handle_event(self, event: pygame.event.Event) -> Optional[str]:
         # ESC cancels the countdown and returns to player entry.
         if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+            self.countdown_sound.stop() # Stop the countdown sound if ESC is pressed.
             return "player_entry"
         # SPACE skips the countdown (for testing).
         if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
@@ -70,8 +77,8 @@ class GameStartCountdown(Screen):
                     Path(__file__).resolve().parent.parent / "assets" / "photon_tracks" / f"Track{track_number:02d}.mp3"
                 )
                 try:
-                    countdown_sound = pygame.mixer.Sound(str(countdown_sound_path))
-                    countdown_sound.play()
+                    self.countdown_sound = pygame.mixer.Sound(str(countdown_sound_path))
+                    self.countdown_sound.play()
                 except (pygame.error, FileNotFoundError):
                     return "play_action"  # Skip the countdown if the sound file cannot be loaded.
                     # If the sound file cannot be loaded, skip playing the sound.
