@@ -326,13 +326,22 @@ class PlayActionScreen(Screen):
         pygame.draw.rect(self.screen, PANEL, rect, border_radius=11)
         pygame.draw.rect(self.screen, accent, rect, width=2, border_radius=11)
 
-    def _draw_score_card(self, team: str, rect: pygame.Rect, color) -> None:
+    def _draw_score_card(self, team: str, rect: pygame.Rect, color, highest_team_score) -> None:
         """Draw the team name and its live total above the three main panels."""
         self._panel(rect, color)
         title = self.heading_font.render(team.upper() + " TEAM", True, color)
         self.screen.blit(title, title.get_rect(center=(rect.centerx, rect.y + 29)))
+        
+        # Blink the winning team's score, assuming they have more than 0 points
+        if (
+            highest_team_score > 0 
+            and self.team_score(team) == highest_team_score
+            and ((pygame.time.get_ticks() // 500) % 10) % 2 == 0
+        ):
+            return
+            
         points = self.score_font.render(str(self.team_score(team)), True, TEXT)
-        self.screen.blit(points, points.get_rect(center=(rect.centerx, rect.y + 80)))
+        self.screen.blit(points, points.get_rect(center=(rect.centerx, rect.y + 80)))    
 
     def _draw_roster(self, team: str, rect: pygame.Rect, color) -> None:
         """Draw one team's players with the highest scorers listed first."""
@@ -365,10 +374,11 @@ class PlayActionScreen(Screen):
             
             # Blink 1st place player & score on team, assuming they have more than 0 points    
             if (
-                index == 0
-                and self.scores.get(player.equipment_id, 0) > 0
+                self.scores.get(player.equipment_id, 0) > 0
+                and max(self.scores.values()) == self.scores.get(player.equipment_id, 0)
                 and ((pygame.time.get_ticks() // 500) % 10) % 2 == 0
             ):
+				
                 continue
             
             player_name = ((player.codename if len(player.codename) <= 18 else (player.codename[:18] + "...")) or f"Player {player.player_id}")
@@ -437,8 +447,9 @@ class PlayActionScreen(Screen):
         self.draw_header("PHOTON PLAYER ACTION", "LIVE PLAY-BY-PLAY / RED VS. GREEN")
 
         # The total-score cards are across the top of the window.
-        self._draw_score_card("Red", pygame.Rect(38, 121, 302, 117), RED)
-        self._draw_score_card("Green", pygame.Rect(760, 121, 302, 117), GREEN)
+        highest_team_score = max(self.team_score("Red"), self.team_score("Green"))
+        self._draw_score_card("Red", pygame.Rect(38, 121, 302, 117), RED, highest_team_score)
+        self._draw_score_card("Green", pygame.Rect(760, 121, 302, 117), GREEN, highest_team_score)
 
         # Replace the center status panel with the
         # six-minute game clock. On entry, the 30-second countdown is over.
