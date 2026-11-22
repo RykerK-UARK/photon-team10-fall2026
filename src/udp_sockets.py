@@ -52,7 +52,7 @@ class UDPSocketPair:
         self.buffer = None
         return buffer_data
         
-    def peek_buffer(self) -> str:
+    def peek_buffer(self) -> str: # Just for testing
         return self.buffer
         
     def update(self) -> None:

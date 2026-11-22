@@ -100,11 +100,11 @@ class PlayActionScreen(Screen):
         and clear the previous game's play-by-play history. This method does
         NOT run the 30-second countdown; that is handled by another screen.
         """
-        # Broadcast start code
-        self.manager.get_network().broadcast(202)
-        
         # Snapshot the players entered before the game starts.
         self.players = list(self.manager.players)
+        for player in self.players:
+            player.base_hit = False
+        
         # Equipment-code lookup lets register_tag() resolve incoming IDs
         # without searching every player in the roster.
         self.players_by_equipment = {p.equipment_id: p for p in self.players}
@@ -125,9 +125,13 @@ class PlayActionScreen(Screen):
                 self.save_error = True
                 print(f"Could not save game: {exc}")
 
-        # TODO (RK - network integration): The networking/controller code
-        # owns any game-start signal. The screen does not send UDP messages.
-
+        # Consume item in buffer in case there is residue from previous game
+        self.manager.get_network().update()
+        self.manager.get_network().read_buffer()
+        
+        # Broadcast start signal
+        self.manager.get_network().broadcast(202)
+        
         # Record time of entering play_action screen for 6 minute timer.
         self.start_time = pygame.time.get_ticks()
         

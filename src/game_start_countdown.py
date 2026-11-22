@@ -12,7 +12,7 @@ VOICE_COUNTDOWN_START_SECONDS = 9
 
 class GameStartCountdown(Screen):
 
-    caption = "Photon"
+    caption = "Countdown"
 
     # duration_ms is the time for each frame of the countdown, not the entire countdown
     def __init__(self, manager, duration_ms: int = 1000):
