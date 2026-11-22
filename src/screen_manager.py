@@ -110,12 +110,12 @@ class ScreenManager:
             if not self.running:
                 break
 
+            if self.current is self.screens.get("play_action"):
+                self.network.update()
+
             next_screen = self.current.update()
             if next_screen:
                 self.switch_to(next_screen)
-                
-            if self.current == "play_action": # Update UDP network buffer, but only for action screen
-                self.network.update()
 
             self.current.draw()
             pygame.display.flip()
