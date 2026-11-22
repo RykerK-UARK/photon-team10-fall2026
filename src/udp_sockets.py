@@ -19,7 +19,7 @@ class UDPSocketPair:
         self.receive_socket.bind(("0.0.0.0", self.receive_port))
         self.receive_socket.setblocking(False)
 
-    def get_network_address() -> str:
+    def get_network_address(self) -> str:
         return self.network_address
         
     def set_network_address(self, new_address: str) -> bool:
@@ -42,7 +42,10 @@ class UDPSocketPair:
         except BlockingIOError:
             return None  # Nothing = waiting
         
-        return data.decode("utf-8")
+        try:
+            return data.decode("utf-8").rstrip("\x00")
+        except UnicodeDecodeError:
+            return None
         
     def read_buffer(self) -> str:
         buffer_data = self.buffer
