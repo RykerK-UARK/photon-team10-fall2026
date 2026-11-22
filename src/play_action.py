@@ -235,6 +235,7 @@ class PlayActionScreen(Screen):
             if shooter.team != targetted_team_base:
                 shooter.base_hit = True
                 self.add_points(shooter_id, POINTS_FOR_BASE)
+                self.manager.get_network().broadcast(target_id) # Broadcasts base ID, doesn't actually do anything, but keeps the traffic generator working
                 
                 color = RED if shooter.team.casefold() == "red" else GREEN
                 self.record_event(
