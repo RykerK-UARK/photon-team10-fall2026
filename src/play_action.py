@@ -33,7 +33,7 @@ YELLOW = (246, 192, 78)
 # easy to adjust without searching through the rendering code.
 POINTS_PER_TAG = 10
 POINTS_FOR_BASE = 100
-BASE_HIT_CODES = (43, 53) # Reserved base IDs; base scoring is not implemented yet.
+BASE_HIT_CODES = (43, 53) # Reserved base IDs.
 END_CODE = 221 # Broadcasted 3 times when the game ends
 MAX_LOG_ENTRIES = 250     # Keep only the most recent 250 events in memory.
 VISIBLE_LOG_ROWS = 7      # Number of event entries displayed without scrolling.
@@ -49,13 +49,9 @@ class PlayActionScreen(Screen):
 
     caption = "Photon - Player Action"
 
-    def __init__(self, manager, database=None):
+    def __init__(self, manager):
         super().__init__(manager)
-        self.database = database
-        self.game_id = None
         self.game_over = False
-        self.save_error = False
-        self.unsaved_scores = set()
         # Match data is populated in on_enter(), after player entry/countdown.
         self.players = []
         self.players_by_equipment = {}  # equipment_id -> player; fast hit lookup.
@@ -114,16 +110,7 @@ class PlayActionScreen(Screen):
         self.event_number = 0
         self.log_scroll = 0
         self.record_event("Match started - waiting for tags", BLUE)
-        self.game_id = None
         self.game_over = False
-        self.save_error = False
-        self.unsaved_scores.clear()
-        if self.database is not None:
-            try:
-                self.game_id = self.database.start_game(self.players)
-            except Exception as exc:
-                self.save_error = True
-                print(f"Could not save game: {exc}")
 
         # Consume item in buffer in case there is residue from previous game
         self.manager.get_network().update()
@@ -170,14 +157,6 @@ class PlayActionScreen(Screen):
         if self.game_over or equipment_id not in self.scores:
             return False
         self.scores[equipment_id] += int(points)
-        if self.game_id is not None:
-            player_id = self.players_by_equipment[equipment_id].player_id
-            try:
-                self.database.update_game_score(self.game_id, player_id, self.scores[equipment_id])
-                self.unsaved_scores.discard(equipment_id)
-            except Exception as exc:
-                self.unsaved_scores.add(equipment_id)
-                print(f"Could not save player score: {exc}")
         return True
 
     def finish_game(self, status: str) -> None:
@@ -187,20 +166,6 @@ class PlayActionScreen(Screen):
         for i in range(3): # Broadcast end code 3 times
             self.manager.get_network().broadcast(END_CODE)
         pygame.mixer.music.stop()
-        if self.game_id is not None:
-            for equipment_id in list(self.unsaved_scores):
-                player_id = self.players_by_equipment[equipment_id].player_id
-                try:
-                    self.database.update_game_score(self.game_id, player_id, self.scores[equipment_id])
-                    self.unsaved_scores.discard(equipment_id)
-                except Exception as exc:
-                    print(f"Could not save player score: {exc}")
-            if not self.unsaved_scores:
-                try:
-                    self.database.finish_game(self.game_id, status)
-                except Exception as exc:
-                    self.save_error = True
-                    print(f"Could not finish game in database: {exc}")
 
     def register_tag(self, shooter_id: int, target_id: int) -> bool:
         """Record one decoded equipment hit; return True if it scored.
@@ -227,7 +192,6 @@ class PlayActionScreen(Screen):
             if shooter.base_hit:
                 return False
             
-            # Im assuming 43 is red (i=1) and the other one is green since I don't remember
             # Determine which team's base is being shot
             targetted_team_base = ""
             if target_id == BASE_HIT_CODES[1]:
@@ -255,8 +219,7 @@ class PlayActionScreen(Screen):
             return False
 
         if shooter.team.casefold() == target.team.casefold():
-            # TODO (RP - friendly fire): Add the team's friendly-fire rule
-            # and log here. Teammate hits are currently ignored entirely.
+
             self.manager.get_network().broadcast(shooter_id)
             self.manager.get_network().broadcast(target_id)
             
@@ -476,6 +439,5 @@ class PlayActionScreen(Screen):
         # Navigation button and event status at the bottom. UDP reception is
         # handled elsewhere; this screen never opens or polls a socket.
         self.back_button.draw(self.screen, self.small_font, pygame.mouse.get_pos())
-        saved = self.game_id is not None and not self.save_error and not self.unsaved_scores
-        status = self.small_font.render("SCORES SAVED" if saved else "SCORES NOT SAVED", True, GREEN if saved else RED)
+        status = self.small_font.render("CURRENT GAME ONLY", True, MUTED_TEXT)
         self.screen.blit(status, status.get_rect(midright=(1062, 680)))
