@@ -86,7 +86,7 @@ def main() -> None:
         manager.register("splash", SplashScreen(manager))
         manager.register("player_entry", PlayerEntryScreen(manager))
         manager.register("countdown", GameStartCountdown(manager))
-        manager.register("play_action", PlayActionScreen(manager))
+        manager.register("play_action", PlayActionScreen(manager, database if connected else None))
         manager.run("splash")
         
         # TEST: Print all players in the database and then clear the database
