@@ -23,7 +23,6 @@ import random
 from screen_manager import Screen
 from ui_elements import BACKGROUND, BORDER, MUTED_TEXT, PANEL, TEXT, Button
 
-# Socket Imports
 # RGB colors used to distinguish teams and different types of information.
 RED = (231, 74, 83)
 GREEN = (92, 214, 118)
@@ -33,7 +32,9 @@ YELLOW = (246, 192, 78)
 # Gameplay and display settings. Keeping these values together makes them
 # easy to adjust without searching through the rendering code.
 POINTS_PER_TAG = 10
-BASE_HIT_CODES = {43, 53} # Reserved base IDs; base scoring is not implemented yet.
+POINTS_FOR_BASE = 100
+BASE_HIT_CODES = (43, 53) # Reserved base IDs; base scoring is not implemented yet.
+END_CODE = 221 # Broadcasted 3 times when the game ends
 MAX_LOG_ENTRIES = 250     # Keep only the most recent 250 events in memory.
 VISIBLE_LOG_ROWS = 7      # Number of event entries displayed without scrolling.
 PLAY_TIME = 360000        # Time that the game will run for in miliseconds.
@@ -99,6 +100,9 @@ class PlayActionScreen(Screen):
         and clear the previous game's play-by-play history. This method does
         NOT run the 30-second countdown; that is handled by another screen.
         """
+        # Broadcast start code
+        self.manager.get_network().broadcast(202)
+        
         # Snapshot the players entered before the game starts.
         self.players = list(self.manager.players)
         # Equipment-code lookup lets register_tag() resolve incoming IDs
@@ -176,6 +180,8 @@ class PlayActionScreen(Screen):
         if self.game_over:
             return
         self.game_over = True
+        for i in range(3): # Broadcast end code 3 times
+            self.manager.get_network().broadcast(END_CODE)
         pygame.mixer.music.stop()
         if self.game_id is not None:
             for equipment_id in list(self.unsaved_scores):
@@ -227,8 +233,14 @@ class PlayActionScreen(Screen):
                 
             # Determine if the player is shooting the opposing team's base as they should
             if shooter.team != targetted_team_base:
-                self.add_points(shooter_id, 100)
                 shooter.base_hit = True
+                self.add_points(shooter_id, POINTS_FOR_BASE)
+                
+                color = RED if shooter.team.casefold() == "red" else GREEN
+                self.record_event(
+                    f"{shooter.codename} tagged base  +{POINTS_FOR_BASE} pts",
+                    color,
+                )
                 return True
             
             return False
@@ -242,6 +254,15 @@ class PlayActionScreen(Screen):
             # and log here. Teammate hits are currently ignored entirely.
             self.manager.get_network().broadcast(shooter_id)
             self.manager.get_network().broadcast(target_id)
+            
+            self.add_points(shooter_id, -POINTS_PER_TAG)
+            self.add_points(target_id, -POINTS_PER_TAG)    
+            
+            color = RED if shooter.team.casefold() == "red" else GREEN
+            self.record_event(
+                f"{shooter.codename} tagged teammate {target.codename}  -{POINTS_PER_TAG} pts",
+                color,
+            )
             return False
 
         # Valid opponent tag: score the shooter and show who tagged whom.
