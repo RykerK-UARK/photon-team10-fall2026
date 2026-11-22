@@ -7,6 +7,7 @@ except ImportError:
     # Allow the Pygame UI to launch in offline/demo mode without this driver.
     psycopg2 = None
 
+
 @dataclass
 class Player:
     player_id: int
@@ -14,18 +15,20 @@ class Player:
     codename: str
     team: str
     base_hit: bool
-    
+
     def set_codename(self, codename):
         self.codename = codename
 
+
 # Define connection parameters (override with PHOTON_DB_* environment variables)
 connection_params = {
-    "dbname":   os.environ.get("PHOTON_DB_NAME", "photon"),
-    "user":     os.environ.get("PHOTON_DB_USER", "student"),
+    "dbname": os.environ.get("PHOTON_DB_NAME", "photon"),
+    "user": os.environ.get("PHOTON_DB_USER", "student"),
     "password": os.environ.get("PHOTON_DB_PASSWORD", "student"),
-    "host":     os.environ.get("PHOTON_DB_HOST", "127.0.0.1"),
-    "port":     os.environ.get("PHOTON_DB_PORT", "5432"),
+    "host": os.environ.get("PHOTON_DB_HOST", "127.0.0.1"),
+    "port": os.environ.get("PHOTON_DB_PORT", "5432"),
 }
+
 
 class playerDatabase:
     # Initialize the database object and connect to PostgreSQL.
@@ -81,10 +84,14 @@ class playerDatabase:
         )
         return self.cursor.fetchone()
 
-    # Add a new player if the ID is not already in the database
+    # Add a new player without changing the existing database schema
     def add_player(self, player_id, codename):
         if self.get_player(player_id) is not None:
             return False
+
+        existing_player = self.get_player_by_codename(codename)
+        if existing_player is not None and existing_player[0] != player_id:
+            raise ValueError(f"Codename {codename} is already used by another player ID.")
 
         self.cursor.execute(
             """
@@ -96,87 +103,6 @@ class playerDatabase:
         self.conn.commit()
         return True
 
-    def start_game(self, players):
-        """Create a game and an initial score row for each player."""
-        with self.conn:
-            self.cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS public.photon_games (
-                    game_id BIGSERIAL PRIMARY KEY,
-                    started_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    finished_at TIMESTAMPTZ,
-                    status TEXT NOT NULL DEFAULT 'active'
-                )
-                """
-            )
-            self.cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS public.photon_game_scores (
-                    game_id BIGINT NOT NULL REFERENCES public.photon_games(game_id),
-                    player_id INTEGER NOT NULL,
-                    codename TEXT NOT NULL,
-                    team TEXT NOT NULL,
-                    equipment_id INTEGER NOT NULL,
-                    score INTEGER NOT NULL DEFAULT 0,
-                    PRIMARY KEY (game_id, player_id)
-                )
-                """
-            )
-            self.cursor.execute(
-                "INSERT INTO public.photon_games DEFAULT VALUES RETURNING game_id"
-            )
-            game_id = self.cursor.fetchone()[0]
-            self.cursor.executemany(
-                """
-                INSERT INTO public.photon_game_scores
-                    (game_id, player_id, codename, team, equipment_id)
-                VALUES (%s, %s, %s, %s, %s)
-                """,
-                [(game_id, player.player_id, player.codename, player.team, player.equipment_id)
-                 for player in players],
-            )
-        return game_id
-
-    def update_game_score(self, game_id, player_id, score):
-        """Persist a player's current score for one game."""
-        with self.conn:
-            self.cursor.execute(
-                """
-                UPDATE public.photon_game_scores SET score = %s
-                WHERE game_id = %s AND player_id = %s
-                """,
-                (score, game_id, player_id),
-            )
-            if self.cursor.rowcount != 1:
-                raise ValueError("Player score row not found")
-
-    def finish_game(self, game_id, status):
-        """Mark a game completed or cancelled."""
-        if status not in ("completed", "cancelled"):
-            raise ValueError("Invalid game status")
-        with self.conn:
-            self.cursor.execute(
-                """
-                UPDATE public.photon_games
-                SET finished_at = CURRENT_TIMESTAMP, status = %s
-                WHERE game_id = %s
-                """,
-                (status, game_id),
-            )
-
-    def get_game_scores(self, game_id):
-        """Retrieve the saved player scores for a game."""
-        self.cursor.execute(
-            """
-            SELECT player_id, codename, team, equipment_id, score
-            FROM public.photon_game_scores
-            WHERE game_id = %s
-            ORDER BY score DESC, codename
-            """,
-            (game_id,),
-        )
-        return self.cursor.fetchall()
-
     # Print the entire players table
     def print_all_players(self):
         self.cursor.execute(
@@ -185,8 +111,8 @@ class playerDatabase:
         rows = self.cursor.fetchall()
         for row in rows:
             print(row)
-            
+
     # Clear database
-    def clear_players(self): # TESTING ONLY, DO NOT USE FOR ANYTHING FINAL IN THE PROJECT!!!!!!!
+    def clear_players(self):  # TESTING ONLY, DO NOT USE FOR ANYTHING FINAL IN THE PROJECT!!!!!!!
         self.cursor.execute("TRUNCATE public.players")
         self.conn.commit()
