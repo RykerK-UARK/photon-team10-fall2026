@@ -77,26 +77,30 @@ class PlayerEntryScreen(Screen):
     def _add_player_to_database(self, player) -> None:
         player_id = player.player_id
         equipment_id = player.equipment_id    
-        codename = player.codename
-        
         saved_player = self.manager.get_database().get_player(player_id)
-        
-        # Player is already in database, use existing name and move on
-        if saved_player != None:
-            player.set_codename(saved_player[1])
-            self.manager.get_network().broadcast(equipment_id)
-            return True
-        # Codename not filled and player not found in database
-        elif not codename:
-            return False  
-        # Codename already used by player in database
-        elif self.manager.get_database().get_player_by_codename(codename) is not None:
+
+        # Existing IDs keep their saved name; new IDs require a supplied name.
+        codename = saved_player[1] if saved_player is not None else player.codename
+        if not codename:
+            return False
+
+        codename_owner = self.manager.get_database().get_player_by_codename(codename)
+        if codename_owner is not None and codename_owner[0] != player_id:
             raise ValueError(f"Codename {codename} is already used by another player ID.")
-        
-        # Player is valid and not already in database, added to database and broadcasted    
-        self.manager.get_database().add_player(player_id, codename)
+
+        if any(
+            other.player_id != player_id
+            and other.codename.casefold() == codename.casefold()
+            for other in self.players
+        ):
+            raise ValueError(f"Codename {codename} is already used by another player ID.")
+
+        if saved_player is not None:
+            player.set_codename(codename)
+        else:
+            self.manager.get_database().add_player(player_id, codename)
+
         self.manager.get_network().broadcast(equipment_id)
-        
         return True
 
     def add_player(self) -> None:
