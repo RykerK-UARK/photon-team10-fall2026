@@ -1,8 +1,9 @@
 # Photon - Team 10 (Fall 2026)
 
 A Pygame laser-tag operator interface. Sprint 3 has player entry, a standalone
-30-second pre-game countdown, and a separate play-action screen showing both team rosters.
-Gameplay events/scoring are not implemented yet.
+30-second pre-game countdown, and a play-action screen with team rosters,
+play-by-play events, and current-match scoring. Scores are kept in memory and
+reset for each match.
 
 ## Run locally (macOS / Windows / Linux)
 
