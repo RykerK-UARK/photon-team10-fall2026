@@ -24,8 +24,6 @@ from screen_manager import Screen
 from ui_elements import BACKGROUND, BORDER, MUTED_TEXT, PANEL, TEXT, Button
 
 # Socket Imports
-from udp_sockets import poll_receive, broadcast_code
-
 # RGB colors used to distinguish teams and different types of information.
 RED = (231, 74, 83)
 GREEN = (92, 214, 118)
@@ -242,12 +240,12 @@ class PlayActionScreen(Screen):
         if shooter.team.casefold() == target.team.casefold():
             # TODO (RP - friendly fire): Add the team's friendly-fire rule
             # and log here. Teammate hits are currently ignored entirely.
-            broadcast_code(shooter_id)
-            broadcast_code(target_id)
+            self.manager.get_network().broadcast(shooter_id)
+            self.manager.get_network().broadcast(target_id)
             return False
 
         # Valid opponent tag: score the shooter and show who tagged whom.
-        broadcast_code(target_id)
+        self.manager.get_network().broadcast(target_id)
         self.add_points(shooter_id, POINTS_PER_TAG)
         color = RED if shooter.team.casefold() == "red" else GREEN
         self.record_event(
@@ -260,9 +258,12 @@ class PlayActionScreen(Screen):
         """Process hits during play and finish the game when time expires."""
         self.current_time = pygame.time.get_ticks() - self.start_time
         if self.current_time < PLAY_TIME and not self.game_over:
-            result = poll_receive()
-            if result is not None:
-                shooter_id, target_id = result
+            packet = self.manager.get_network().read_buffer()
+            if packet is not None:
+                try:
+                    shooter_id, target_id = map(int, packet.split(":"))
+                except ValueError:
+                    return None
                 self.register_tag(shooter_id, target_id)
         elif not self.game_over:
             self.finish_game("completed")
@@ -404,13 +405,20 @@ class PlayActionScreen(Screen):
         self._draw_score_card("Red", pygame.Rect(38, 121, 302, 117), RED)
         self._draw_score_card("Green", pygame.Rect(760, 121, 302, 117), GREEN)
 
-        # TODO (JH - timer): Replace the center status panel with the
+        # Replace the center status panel with the
         # six-minute game clock. On entry, the 30-second countdown is over.
         center = pygame.Rect(353, 121, 394, 117)
         self._panel(center)
         status_title = self.small_label_font.render("GAME COMPLETE" if self.game_over else "GAME IN PROGRESS", True, MUTED_TEXT)
         self.screen.blit(status_title, status_title.get_rect(center=(center.centerx, 154)))
-        status_text = self.heading_font.render("FINAL SCORES" if self.game_over else "LIVE GAME", True, BLUE)
+        if self.game_over:
+            center_text = "FINAL SCORES"
+        else:
+            remaining_ms = max(0, PLAY_TIME - (self.current_time or 0))
+            remaining_seconds = (remaining_ms + 999) // 1000
+            minutes, seconds = divmod(remaining_seconds, 60)
+            center_text = f"{minutes:02d}:{seconds:02d}"
+        status_text = self.score_font.render(center_text, True, BLUE)
         self.screen.blit(status_text, status_text.get_rect(center=(center.centerx, 196)))
 
         # Main content: two player lists with the chronological action feed
