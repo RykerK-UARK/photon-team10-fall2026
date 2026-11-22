@@ -20,6 +20,9 @@ GREEN = (31, 112, 53)
 GREEN_HOVER = (40, 142, 67)
 ERROR = (235, 95, 95)
 SUCCESS = (100, 220, 130)
+MAX_PLAYERS_PER_TEAM = 15
+ROSTER_VISIBLE_ROWS = 3
+ROSTER_ROW_HEIGHT = 22
 
 
 class PlayerEntryScreen(Screen):
@@ -41,6 +44,11 @@ class PlayerEntryScreen(Screen):
         
         self.players: list[Player] = manager.players  # shared with the other screens
         self.team = "Red"
+        self.roster_rects = {
+            "Red": pygame.Rect(105, 480, 400, 150),
+            "Green": pygame.Rect(595, 480, 400, 150),
+        }
+        self.roster_scroll = {"Red": 0, "Green": 0}
         self.database_connected = self.manager.get_database().conn is not None and self.manager.get_database().cursor is not None
         self.message = ("Enter an equipment ID and codename." if self.database_connected else "Offline demo: players are not saved to PostgreSQL.")
 
@@ -121,6 +129,13 @@ class PlayerEntryScreen(Screen):
         if equipment_id in (43, 53):
             self._set_message(f"Equipment ID {equipment_id} is reserved for the team bases.", ERROR)
             return
+        team_player_count = sum(
+            player.team.casefold() == self.team.casefold()
+            for player in self.players
+        )
+        if team_player_count >= MAX_PLAYERS_PER_TEAM:
+            self._set_message(f"{self.team} Team already has {MAX_PLAYERS_PER_TEAM} players.", ERROR)
+            return
 
         player = Player(player_id=player_id, equipment_id=equipment_id, codename=codename, team=self.team, base_hit=False)
 
@@ -151,6 +166,10 @@ class PlayerEntryScreen(Screen):
                 return
 
         self.players.append(player)
+        self.roster_scroll[self.team] = max(
+            0,
+            team_player_count + 1 - ROSTER_VISIBLE_ROWS,
+        )
         self.player_id_input.text = ""
         self.equipment_input.text = ""
         self.codename_input.text = ""
@@ -212,25 +231,34 @@ class PlayerEntryScreen(Screen):
             self.screen.blit(empty, empty.get_rect(center=(rect.centerx, rect.y + 80)))
             return
 
-        y = rect.y + 62
-        for index, player in enumerate(team_players[:6], start=1):
-            row = f"{index}.  {player.equipment_id:<4}  {player.codename}"
+        max_scroll = max(0, len(team_players) - ROSTER_VISIBLE_ROWS)
+        scroll = max(0, min(self.roster_scroll[team], max_scroll))
+        self.roster_scroll[team] = scroll
+        row_area = pygame.Rect(rect.x + 12, rect.y + 54, rect.width - 34, 70)
+        previous_clip = self.screen.get_clip()
+        self.screen.set_clip(row_area)
+        for row_index, player in enumerate(
+            team_players[scroll:scroll + ROSTER_VISIBLE_ROWS], start=scroll + 1
+        ):
+            row = f"{row_index}.  {player.equipment_id:<4}  {player.codename}"
             rendered = self.small_font.render(row, True, TEXT)
+            y = row_area.y + (row_index - scroll - 1) * ROSTER_ROW_HEIGHT
             self.screen.blit(rendered, (rect.x + 18, y))
-            y += 27
+        self.screen.set_clip(previous_clip)
 
-        if len(team_players) > 6:
-            extra = self.small_font.render(
-                f"+ {len(team_players) - 6} more player(s)", True, MUTED_TEXT
+        if len(team_players) > ROSTER_VISIBLE_ROWS:
+            last_visible = min(scroll + ROSTER_VISIBLE_ROWS, len(team_players))
+            range_text = self.small_font.render(
+                f"{scroll + 1}-{last_visible} of {len(team_players)}", True, MUTED_TEXT
             )
-            self.screen.blit(extra, (rect.x + 18, y + 4))
+            self.screen.blit(range_text, (rect.x + 18, rect.bottom - 22))
 
     def _draw_rosters(self) -> None:
         self._draw_roster_column(
-            "RED TEAM", "Red", pygame.Rect(105, 480, 400, 150), RED_HOVER
+            "RED TEAM", "Red", self.roster_rects["Red"], RED_HOVER
         )
         self._draw_roster_column(
-            "GREEN TEAM", "Green", pygame.Rect(595, 480, 400, 150), GREEN_HOVER
+            "GREEN TEAM", "Green", self.roster_rects["Green"], GREEN_HOVER
         )
         self.clear_button.draw(self.screen, self.small_font, pygame.mouse.get_pos())
         self.start_button.draw(self.screen, self.small_font, pygame.mouse.get_pos())
@@ -238,6 +266,7 @@ class PlayerEntryScreen(Screen):
     def clear_players(self) -> None:
         # Clear the players on screen, but not those in the database
         self.players.clear()
+        self.roster_scroll = {"Red": 0, "Green": 0}
         self.equipment_input.text = ""
         self.codename_input.text = ""
         self._set_message("All player entries cleared.", MUTED_TEXT)
@@ -262,6 +291,21 @@ class PlayerEntryScreen(Screen):
         return None
 
     def handle_event(self, event: pygame.event.Event) -> Optional[str]:
+        if event.type == pygame.MOUSEWHEEL:
+            mouse_pos = pygame.mouse.get_pos()
+            for team, rect in self.roster_rects.items():
+                if rect.collidepoint(mouse_pos):
+                    team_count = sum(
+                        player.team.casefold() == team.casefold()
+                        for player in self.players
+                    )
+                    max_scroll = max(0, team_count - ROSTER_VISIBLE_ROWS)
+                    self.roster_scroll[team] = max(
+                        0,
+                        min(max_scroll, self.roster_scroll[team] - event.y),
+                    )
+                    break
+
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
                 return "quit"
@@ -270,6 +314,7 @@ class PlayerEntryScreen(Screen):
             elif event.key == pygame.K_F12:
                 # Clear this game's roster without deleting database records.
                 self.players.clear()
+                self.roster_scroll = {"Red": 0, "Green": 0}
                 self.player_id_input.text = ""
                 self.equipment_input.text = ""
                 self.codename_input.text = ""
