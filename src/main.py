@@ -81,12 +81,10 @@ def main() -> None:
     try:
         manager = ScreenManager(database, network)
 
-        # The local UI can still be demonstrated when PostgreSQL is offline.
-        connected = database.conn is not None and database.cursor is not None
         manager.register("splash", SplashScreen(manager))
         manager.register("player_entry", PlayerEntryScreen(manager))
         manager.register("countdown", GameStartCountdown(manager))
-        manager.register("play_action", PlayActionScreen(manager, database if connected else None))
+        manager.register("play_action", PlayActionScreen(manager))
         manager.run("splash")
         
         # TEST: Print all players in the database and then clear the database
