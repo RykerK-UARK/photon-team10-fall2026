@@ -112,11 +112,14 @@ class PlayerEntryScreen(Screen):
             return
 
         equipment_id = int(equipment_text)
-        if equipment_id <= 0:
+        if equipment_id <= 0:    
             self._set_message("Equipment ID must be greater than 0.", ERROR)
             return
         if any(player.equipment_id == equipment_id for player in self.players):
             self._set_message(f"Equipment ID {equipment_id} is already assigned.", ERROR)
+            return
+        if equipment_id in (43, 53):
+            self._set_message(f"Equipment ID {equipment_id} is reserved for the team bases.", ERROR)
             return
 
         player = Player(player_id=player_id, equipment_id=equipment_id, codename=codename, team=self.team, base_hit=False)

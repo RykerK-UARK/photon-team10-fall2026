@@ -358,13 +358,22 @@ class PlayActionScreen(Screen):
         # Fit up to 15 player rows in this panel at the current window size.
         for index, player in enumerate(roster[:15]):
             y = rect.y + 62 + index * 21
+            
+            # Draw a persistent base icon by any player who has successfully hit the opposing base (does not blink)
+            if player.base_hit:
+                self._draw_base_icon(rect.x + 12, y)
+            
+            # Blink 1st place player & score on team, assuming they have more than 0 points    
+            if (
+                index == 0
+                and self.scores.get(player.equipment_id, 0) > 0
+                and ((pygame.time.get_ticks() // 500) % 10) % 2 == 0
+            ):
+                continue
+            
             player_name = ((player.codename if len(player.codename) <= 18 else (player.codename[:18] + "...")) or f"Player {player.player_id}")
             name = self.player_font.render(player_name, True, TEXT)
-            self.screen.blit(name, (rect.x + 14, y))
-
-            # Draw a persistent base icon by any player who has successfully hit the opposing base.
-            if player.base_hit:
-                self._draw_base_icon(rect.x + 185, y)
+            self.screen.blit(name, (rect.x + 40, y))
 
             score = self.player_font.render(str(self.scores.get(player.equipment_id, 0)), True, TEXT)
             self.screen.blit(score, score.get_rect(topright=(rect.right - 14, y)))
